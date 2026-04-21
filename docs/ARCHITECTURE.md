@@ -229,12 +229,12 @@ sequenceDiagram
     Note over U: Network disconnects
     Note over U: Backoff reconnect
 
-    U->>WS: WS connect {jwt, last_seen_id: 100}
+    U->>WS: WS connect {jwt, last_seen_id 100}
     WS->>WS: verify JWT
-    WS->>PG: SELECT * FROM messages WHERE channel_id IN (...) AND id > 100 ORDER BY id ASC
-    PG-->>WS: rows [101, 102, 103, 104, 105]
-    WS->>U: WS push backlog [101..105]
-    WS->>RD: SUBSCRIBE chan:<each user channel>
+    WS->>PG: SELECT messages WHERE channel_id in user_channels AND id newer than 100
+    PG-->>WS: rows 101 to 105
+    WS->>U: WS push backlog 101..105
+    WS->>RD: SUBSCRIBE chan for each user channel
     Note over U,WS: Live stream resumed
 ```
 
@@ -244,27 +244,28 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant A as Alice (on chat-service A)
-    participant B as Bob (on chat-service B)
+    actor A as Alice
+    actor B as Bob
     participant WSA as chat-service A
     participant WSB as chat-service B
     participant RD as Redis
 
-    Note over A,WSA: Active WS connection
-    Note over B,WSB: Active WS connection
+    Note over A,WSA: Alice connected to WSA
+    Note over B,WSB: Bob connected to WSB
     A->>WSA: send "hello"
-    WSA->>WSB: (via Redis) fanout
+    WSA->>RD: publish
+    RD->>WSB: fanout
     WSB->>B: deliver "hello"
 
     Note over WSA: kubectl delete pod chat-service-A
-    WSA-xA: connection drops
-    Note over A: client reconnect → routed by Traefik to WSB (or new replica)
+    WSA--xA: connection drops
+    Note over A: reconnect routed by Traefik to WSB or a new replica
     A->>WSB: WS connect {last_seen_id}
     WSB->>A: backlog replay, then live stream
     B->>WSB: send "and now?"
-    WSB->>WSA: (Redis has no WSA subscriber anymore — no delivery)
-    WSB->>WSB: local delivery to Bob ✓
-    WSB->>A: delivery via Alice's new connection ✓
+    Note over WSB: Redis has no WSA subscriber anymore - no wasted delivery
+    WSB->>B: local delivery to Bob
+    WSB->>A: delivery via Alice's new connection
 ```
 
 No messages lost, no users stuck. This is the "kill-a-node" moment of the final demo.
@@ -286,19 +287,19 @@ No messages lost, no users stuck. This is the "kill-a-node" moment of the final 
 
 ```mermaid
 flowchart LR
-    subgraph Host[Developer machine]
-        subgraph DC[docker-compose network]
-            TGW[traefik]
-            API1[api-service x2]
-            WS1[chat-service x2]
-            PG[postgres]
-            RD[redis]
-            FE[next.js dev server]
+    subgraph Host["Developer machine"]
+        subgraph DC["docker-compose network"]
+            TGW["traefik"]
+            API1["api-service x2"]
+            WS1["chat-service x2"]
+            PG["postgres"]
+            RD["redis"]
+            FE["next.js dev server"]
         end
     end
 
-    Dev[Developer<br/>localhost] -->|:3000| FE
-    Dev -->|:8080| TGW
+    Dev["Developer<br/>localhost"] -->|":3000"| FE
+    Dev -->|":8080"| TGW
     TGW --> API1
     TGW -.-> WS1
     API1 --> PG
@@ -316,26 +317,26 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Cluster[k3d cluster]
-        Ing[Traefik Ingress]
+    subgraph Cluster["k3d cluster"]
+        Ing["Traefik Ingress"]
 
-        subgraph NS[chat namespace]
-            APID[api-service Deployment<br/>replicas: 2]
-            WSD[chat-service Deployment<br/>replicas: 3]
-            PGSS[postgres StatefulSet<br/>replicas: 1]
-            RDSS[redis StatefulSet<br/>replicas: 1]
-            FEDP[frontend Deployment<br/>replicas: 1]
+        subgraph NS["chat namespace"]
+            APID["api-service Deployment<br/>replicas 2"]
+            WSD["chat-service Deployment<br/>replicas 3"]
+            PGSS["postgres StatefulSet<br/>replicas 1"]
+            RDSS["redis StatefulSet<br/>replicas 1"]
+            FEDP["frontend Deployment<br/>replicas 1"]
 
-            APIS[api-service Service]
-            WSS[chat-service Service]
-            PGS[postgres Service]
-            RDS[redis Service]
-            FES[frontend Service]
+            APIS["api-service Service"]
+            WSS["chat-service Service"]
+            PGS["postgres Service"]
+            RDS["redis Service"]
+            FES["frontend Service"]
         end
 
-        Ing -->|/api/*| APIS
-        Ing -->|/ws| WSS
-        Ing -->|/| FES
+        Ing -->|"/api/*"| APIS
+        Ing -->|"/ws"| WSS
+        Ing -->|"/"| FES
 
         APIS --> APID
         WSS --> WSD

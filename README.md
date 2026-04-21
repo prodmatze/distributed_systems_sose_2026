@@ -68,5 +68,5 @@ Expected endpoints:
 ## Course context
 
 - **Course**: Distributed Systems, Summer Semester 2026
-- **Institution**: [to fill in]
-- **Instructor**: Elyess
+- **Institution**: [HTW - Berlin]
+- **Instructor**: Elyess Eleuch
