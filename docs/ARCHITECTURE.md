@@ -225,7 +225,7 @@ sequenceDiagram
     participant PG as PostgreSQL
     participant RD as Redis pub/sub
 
-    Note over U,WS: Active session; last_seen = 100
+    Note over U,WS: Active session with last_seen at 100
     Note over U: Network disconnects
     Note over U: Backoff reconnect
 
