@@ -42,28 +42,34 @@ Full requirements, user stories, and tier rationale in [`docs/PRD.md`](./docs/PR
 ```
 .
 ├── README.md                 # This file
-├── CLAUDE.md                 # Contribution policy notes
 ├── docs/
 │   ├── PRD.md                # Product requirements, user stories, scope tiers
 │   └── ARCHITECTURE.md       # System design, service boundaries, data flows
-└── (backend, frontend, infra — coming as issues land)
+├── backend/
+│   ├── api/                  # FastAPI REST service (scaffolding in #3)
+│   └── chat/                 # FastAPI WebSocket service (scaffolding in #4)
+├── frontend/                 # Next.js application (scaffolding in #5)
+└── infra/
+    ├── compose/              # Docker Compose stack for local dev
+    └── k8s/                  # Kubernetes manifests (deployment demo)
 ```
 
 ## Running locally
 
-> *Not yet implemented — scaffolding is the first wave of MVP issues.*
-
-Once scaffolding lands:
+The infrastructure stack (Postgres, Redis, Traefik) runs today. Application services land in upcoming issues (#3, #4, #5).
 
 ```bash
-docker compose up --build
+cp infra/compose/.env.example infra/compose/.env
+docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up
 ```
 
 Expected endpoints:
 
-- Frontend: `http://localhost:3000`
-- API (via Traefik): `http://localhost:8080`
+- Frontend: `http://localhost:3000` *(once #5 lands)*
+- API (via Traefik): `http://localhost:8080` *(once #3 lands)*
 - Traefik dashboard: `http://localhost:8081`
+
+See [`infra/compose/README.md`](./infra/compose/README.md) for the full lifecycle (start, stop, wipe, log tailing, smoke tests).
 
 ## Course context
 
