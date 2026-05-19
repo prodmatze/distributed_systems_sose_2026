@@ -31,6 +31,18 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    build:
+      context: ../../backend/shared
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   traefik:
     image: traefik:v3.1
     restart: unless-stopped
