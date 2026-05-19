@@ -8,3 +8,6 @@ Requires-Dist: asyncpg>=0.29.0
 Requires-Dist: alembic>=1.13.0
 Requires-Dist: pydantic>=2.7.0
 Requires-Dist: pydantic-settings>=2.3.0
+Requires-Dist: passlib[bcrypt]>=1.7.4
+Requires-Dist: pyjwt>=2.9.0
+Requires-Dist: email-validator>=2.2.0
