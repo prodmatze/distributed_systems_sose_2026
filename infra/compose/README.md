@@ -10,9 +10,12 @@ This is the **infrastructure-only** skeleton. Application services land in follo
 |---|---|---|---|
 | `postgres` | `postgres:16` | `5432` | Durable storage. Source of truth for users, channels, messages. |
 | `redis` | `redis:7-alpine` | `6379` | Pub/sub fanout, cache, presence (TTL keys). |
+| `migrate` | built from `backend/shared/` | — | One-shot: runs `alembic upgrade head` against Postgres, then exits 0. |
 | `traefik` | `traefik:v3.1` | `8080` (HTTP entry), `8081` (dashboard) | API gateway / load balancer. Reads Docker labels. |
 
 Postgres and Redis use named volumes (`postgres_data`, `redis_data`) so data survives `docker compose down`. To wipe state, use `docker compose down -v`.
+
+The `migrate` service is a [one-shot job pattern](https://docs.docker.com/compose/how-tos/lifecycle/): `restart: "no"`, exits as soon as `alembic upgrade head` completes. App services declare `depends_on: migrate: condition: service_completed_successfully` so they don't start until the schema is current.
 
 ## Planned additions
 

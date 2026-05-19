@@ -1,0 +1,25 @@
+[project]
+name = "chorus-shared"
+version = "0.1.0"
+description = "Shared code for Chorus backend services: SQLAlchemy models, async DB engine, settings, auth helpers."
+requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "pyjwt>=2.9.0",
+    "email-validator>=2.2.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
