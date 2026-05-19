@@ -31,12 +31,44 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    build:
+      context: ../../backend/shared
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../../backend
+      dockerfile: api/Dockerfile
+    # TEMP: bypass Traefik until the v3 + Docker 29 API-version bug is solved.
+    # Once Traefik routing works, drop `ports` and add traefik labels back.
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   traefik:
-    image: traefik:v3.1
+    image: traefik:v3.5
     restart: unless-stopped
     environment:
-      # Pin Docker client API version. Traefik v3.1's bundled Docker client
-      # otherwise falls back to API 1.24, which Docker daemon 25+ rejects.
+      # Pin Docker client API version. Without this, Traefik's bundled
+      # Docker client falls back to API 1.24, which Docker daemon 25+ rejects.
       DOCKER_API_VERSION: "1.44"
     command:
       - --api.dashboard=true

@@ -46,6 +46,7 @@ Full requirements, user stories, and tier rationale in [`docs/PRD.md`](./docs/PR
 │   ├── PRD.md                # Product requirements, user stories, scope tiers
 │   └── ARCHITECTURE.md       # System design, service boundaries, data flows
 ├── backend/
+│   ├── shared/               # Internal package: SQLAlchemy models, Alembic, settings, JWT helpers
 │   ├── api/                  # FastAPI REST service (scaffolding in #3)
 │   └── chat/                 # FastAPI WebSocket service (scaffolding in #4)
 ├── frontend/                 # Next.js application (scaffolding in #5)
@@ -56,12 +57,14 @@ Full requirements, user stories, and tier rationale in [`docs/PRD.md`](./docs/PR
 
 ## Running locally
 
-The infrastructure stack (Postgres, Redis, Traefik) runs today. Application services land in upcoming issues (#3, #4, #5).
+The infrastructure stack (Postgres, Redis, Traefik) plus the one-shot `migrate` service that applies the schema runs today. Application services land in upcoming issues (#3, #4, #5).
 
 ```bash
 cp infra/compose/.env.example infra/compose/.env
 docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up
 ```
+
+On `up`, the `migrate` service waits for Postgres, runs `alembic upgrade head` against it, then exits 0. Application services will declare `depends_on: migrate: condition: service_completed_successfully` so they boot against a known-good schema.
 
 Expected endpoints:
 
