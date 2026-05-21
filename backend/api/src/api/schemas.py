@@ -19,6 +19,8 @@ class UserResponse(BaseModel):
     username: str
     created_at: datetime
 
+    model_config = {"from_attributes": True}  # lets FastAPI build this from a SQLAlchemy User
+
 #response for both REGISTER & LOGIN
 class TokenResponse(BaseModel):
     access_token: str
