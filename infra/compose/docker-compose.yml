@@ -47,10 +47,9 @@ services:
     build:
       context: ../../backend
       dockerfile: api/Dockerfile
-    # TEMP: direct port mapping until nginx gateway lands.
-    # Once nginx routes, drop `ports` and reach api only on the internal network.
-    ports:
-      - "8000:8000"
+    # No host port — reachable only via the nginx gateway on the internal network.
+    expose:
+      - "8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
@@ -67,9 +66,8 @@ services:
     build:
       context: ../../backend
       dockerfile: auth/Dockerfile
-    # TEMP: direct port mapping until nginx gateway lands.
-    ports:
-      - "8001:8000"
+    expose:
+      - "8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
@@ -82,24 +80,16 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  traefik:
-    image: traefik:v3.5
+  gateway:
+    image: nginx:alpine
     restart: unless-stopped
-    environment:
-      # Pin Docker client API version. Without this, Traefik's bundled
-      # Docker client falls back to API 1.24, which Docker daemon 25+ rejects.
-      DOCKER_API_VERSION: "1.44"
-    command:
-      - --api.dashboard=true
-      - --api.insecure=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
     ports:
       - "8080:80"
-      - "8081:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - auth
 
 volumes:
   postgres_data:
