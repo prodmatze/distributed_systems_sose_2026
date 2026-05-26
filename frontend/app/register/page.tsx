@@ -24,9 +24,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { ApiError, login, saveSession } from "@/lib/api"
+import { ApiError, register, saveSession } from "@/lib/api"
 
-const loginSchema = z.object({
+const registerSchema = z.object({
+  email: z.string().email("Enter a valid email address"),
   username: z
     .string()
     .min(3, "Username must be at least 3 characters")
@@ -37,21 +38,21 @@ const loginSchema = z.object({
     .max(12, "Password must be at most 12 characters"),
 })
 
-type LoginValues = z.infer<typeof loginSchema>
+type RegisterValues = z.infer<typeof registerSchema>
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
 
-  const form = useForm<LoginValues>({
-    resolver: standardSchemaResolver(loginSchema),
-    defaultValues: { username: "", password: "" },
+  const form = useForm<RegisterValues>({
+    resolver: standardSchemaResolver(registerSchema),
+    defaultValues: { email: "", username: "", password: "" },
   })
 
-  async function onSubmit(values: LoginValues) {
+  async function onSubmit(values: RegisterValues) {
     setServerError(null)
     try {
-      const tokenResponse = await login(values)
+      const tokenResponse = await register(values)
       saveSession(tokenResponse)
       router.push("/")
     } catch (err) {
@@ -65,14 +66,32 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in to Chorus</CardTitle>
+          <CardTitle>Create your Chorus account</CardTitle>
           <CardDescription>
-            Welcome back. Enter your credentials to continue.
+            Pick a username and password to get started.
           </CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="username"
@@ -99,7 +118,7 @@ export default function LoginPage() {
                     <FormControl>
                       <Input
                         type="password"
-                        autoComplete="current-password"
+                        autoComplete="new-password"
                         {...field}
                       />
                     </FormControl>
@@ -119,12 +138,12 @@ export default function LoginPage() {
                 className="w-full"
                 disabled={form.formState.isSubmitting}
               >
-                {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
+                {form.formState.isSubmitting ? "Creating account…" : "Create account"}
               </Button>
               <p className="text-sm text-muted-foreground">
-                No account yet?{" "}
-                <a href="/register" className="underline underline-offset-4">
-                  Create one
+                Already have an account?{" "}
+                <a href="/login" className="underline underline-offset-4">
+                  Sign in
                 </a>
               </p>
             </CardFooter>
