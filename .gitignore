@@ -15,3 +15,10 @@ venv/
 
 # Personal learning notes — kept locally, not part of the project deliverable
 learning-docs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv-*/
+.pytest_cache/
