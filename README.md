@@ -24,7 +24,7 @@ Long-term product direction is a community platform with persistent text channel
 | Durable storage | PostgreSQL |
 | Cache / pub-sub / presence | Redis |
 | Async jobs (V2+) | RabbitMQ |
-| API gateway / load balancer | Traefik |
+| API gateway / reverse proxy | nginx (Compose) · Ingress (Kubernetes) |
 | Local dev | Docker Compose |
 | Deployment target | Kubernetes (k3d / minikube) |
 | CI/CD | GitHub Actions |
@@ -46,31 +46,49 @@ Full requirements, user stories, and tier rationale in [`docs/PRD.md`](./docs/PR
 │   ├── PRD.md                # Product requirements, user stories, scope tiers
 │   └── ARCHITECTURE.md       # System design, service boundaries, data flows
 ├── backend/
-│   ├── shared/               # Internal package: SQLAlchemy models, Alembic, settings, JWT helpers
-│   ├── api/                  # FastAPI REST service (scaffolding in #3)
-│   └── chat/                 # FastAPI WebSocket service (scaffolding in #4)
-├── frontend/                 # Next.js application (scaffolding in #5)
+│   ├── shared/               # Internal package: SQLAlchemy models, Alembic, settings, auth/JWT helpers
+│   ├── auth/                 # FastAPI auth service: register, login, JWT issuance
+│   ├── api/                  # FastAPI REST service: channels, history, profiles (scaffolded)
+│   └── chat/                 # FastAPI WebSocket service: realtime fanout (in progress)
+├── frontend/                 # Next.js application (login/register wired up)
 └── infra/
+    ├── nginx/                # Gateway config (nginx.conf) for the Compose stack
     ├── compose/              # Docker Compose stack for local dev
     └── k8s/                  # Kubernetes manifests (deployment demo)
 ```
 
+The backend is split into **two service classes** — a stateless REST tier (`auth` + `api`) and a stateful WebSocket tier (`chat`) — behind a single nginx gateway. The auth/api split and the gateway choice are explained in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §2–§3.
+
 ## Running locally
 
-The infrastructure stack (Postgres, Redis, Traefik) plus the one-shot `migrate` service that applies the schema runs today. Application services land in upcoming issues (#3, #4, #5).
+The backend stack — Postgres, Redis, the one-shot `migrate` job, the `auth` and `api` services, and the nginx gateway — runs with one command:
 
 ```bash
 cp infra/compose/.env.example infra/compose/.env
-docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up
+docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up --build
 ```
 
-On `up`, the `migrate` service waits for Postgres, runs `alembic upgrade head` against it, then exits 0. Application services will declare `depends_on: migrate: condition: service_completed_successfully` so they boot against a known-good schema.
+On `up`, the `migrate` service waits for Postgres, runs `alembic upgrade head`, then exits 0. The app services declare `depends_on: migrate: condition: service_completed_successfully`, so they only boot against a known-good schema.
 
-Expected endpoints:
+The frontend runs on the host for fast hot-reload:
 
-- Frontend: `http://localhost:3000` *(once #5 lands)*
-- API (via Traefik): `http://localhost:8080` *(once #3 lands)*
-- Traefik dashboard: `http://localhost:8081`
+```bash
+cd frontend && pnpm install && pnpm dev
+```
+
+Endpoints:
+
+- Frontend: `http://localhost:3000`
+- Gateway (single ingress): `http://localhost:8080`
+  - `POST /auth/register`, `POST /auth/login` → auth-service
+  - `GET /api/health`, `GET /api/channels` → api-service
+
+Smoke test the gateway:
+
+```bash
+curl http://localhost:8080/auth/health   # {"ok":true,"service":"auth"}
+curl http://localhost:8080/api/health    # {"ok":true}
+```
 
 See [`infra/compose/README.md`](./infra/compose/README.md) for the full lifecycle (start, stop, wipe, log tailing, smoke tests).
 

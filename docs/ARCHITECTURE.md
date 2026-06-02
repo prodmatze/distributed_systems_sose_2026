@@ -23,11 +23,11 @@ flowchart TB
         B2[Browser B]
     end
 
-    TGW[Traefik<br/>Gateway / Load Balancer]
+    GW[nginx<br/>Gateway / Reverse Proxy]
 
-    subgraph APITier["API tier (stateless, N replicas)"]
-        API1[api-service #1]
-        API2[api-service #2]
+    subgraph REST["Stateless REST tier (N replicas)"]
+        AUTH[auth-service]
+        API[api-service]
     end
 
     subgraph WSTier["WebSocket tier (stateful, N replicas)"]
@@ -41,19 +41,19 @@ flowchart TB
         RD[(Redis<br/>pub/sub + presence + cache)]
     end
 
-    B1 -->|HTTPS REST| TGW
-    B2 -->|HTTPS REST| TGW
-    B1 -.->|WSS| TGW
-    B2 -.->|WSS| TGW
+    B1 -->|HTTPS REST| GW
+    B2 -->|HTTPS REST| GW
+    B1 -.->|WSS| GW
+    B2 -.->|WSS| GW
 
-    TGW -->|/api/*| API1
-    TGW -->|/api/*| API2
-    TGW -.->|/ws| WS1
-    TGW -.->|/ws| WS2
-    TGW -.->|/ws| WS3
+    GW -->|/auth/*| AUTH
+    GW -->|/api/*| API
+    GW -.->|/ws| WS1
+    GW -.->|/ws| WS2
+    GW -.->|/ws| WS3
 
-    API1 --> PG
-    API2 --> PG
+    AUTH --> PG
+    API --> PG
     WS1 --> PG
     WS2 --> PG
     WS3 --> PG
@@ -61,39 +61,51 @@ flowchart TB
     WS1 <-->|pub/sub| RD
     WS2 <-->|pub/sub| RD
     WS3 <-->|pub/sub| RD
-    API1 --> RD
-    API2 --> RD
+    API --> RD
 ```
 
-Two backend service classes with different scaling characteristics:
+**Two service *classes*, three services.** The split is by scaling characteristic, not by feature:
 
-- **api-service** handles REST endpoints (auth, channel CRUD, history queries, user profile). Stateless — any instance can serve any request. Scales with HTTP request volume.
-- **chat-service** terminates WebSocket connections. Stateful at the connection level (holds a socket per connected client) and subscribed to Redis pub/sub channels for message fanout. Scales with concurrent connections.
+- **Stateless REST tier** — `auth-service` and `api-service`. No per-process state; any replica serves any request after verifying the JWT. Scales with HTTP request volume, with zero coordination. These are *two services in one class*: they are deployed and scaled the same way, but kept separate because `auth-service` is a **security boundary** (see §3.2) — it is the only service that holds password material and mints tokens.
+- **Stateful WebSocket tier** — `chat-service`. Terminates WebSocket connections, holds a socket per connected client, and subscribes to Redis pub/sub for message fanout. Scales with concurrent connections.
 
-This split is deliberate: it gives the project two distinct scaling stories rather than one, and the WebSocket-vs-REST boundary is a natural place to discuss stateful versus stateless service design in the final presentation.
+This split gives the project two distinct scaling stories rather than one, and the WebSocket-vs-REST boundary is a natural place to discuss stateful versus stateless service design in the final presentation. The further split of `auth` out of `api` is a deliberate, defensible choice — argued in §3.2 — rather than premature decomposition: the two share a class and a database, but isolating credential handling limits the blast radius of a compromise in the larger, more frequently-changed `api-service`.
 
 ## 3. Services and responsibilities
 
-### 3.1 Traefik (API gateway and load balancer)
+### 3.1 nginx (API gateway and reverse proxy)
 
+- The single ingress point on `:8080`; frontends and external clients never talk to backend services directly. In Compose the backend services use `expose` (internal-network-only), not `ports`, so the gateway is the *only* way in.
+- Routes by path prefix: `/auth/*` → `auth-service`, `/api/*` → `api-service`, and (when it lands) `/ws` → `chat-service`.
+- Handles CORS centrally: echoes the allowed dev origin (`http://localhost:3000`) and answers `OPTIONS` preflight, so backend services never deal with CORS themselves.
 - Terminates TLS in the deployment demo.
-- Routes `/api/*` requests to `api-service` replicas (round-robin).
-- Routes `/ws` WebSocket upgrades to `chat-service` replicas.
-- Serves as the single ingress point; frontends never talk to backend services directly.
-- In the Kubernetes deployment, doubles as the Ingress controller.
 - In V2, enforces rate limits.
 
-### 3.2 api-service (FastAPI)
+**Why nginx and not Traefik.** The project initially used Traefik (label-based service discovery off the Docker socket). At a three-service scale its autodiscovery added moving parts — a mounted Docker socket, a pinned Docker API version, and routing rules scattered across container labels — for little benefit. nginx replaces it with a **single, explicit `nginx.conf`**: the entire routing and CORS story is legible in one file you can point at in the presentation. Routing transparency beats autodiscovery convenience at this scale. The rationale is expanded in §7.
+
+### 3.2 auth-service (FastAPI)
+
+The identity and credentials service, and a deliberate **security boundary**.
 
 - REST endpoints:
-  - `POST /api/auth/register`, `POST /api/auth/login` — issue JWTs.
+  - `POST /auth/register` — create a user (409 on duplicate username/email), hash the password, issue a JWT.
+  - `POST /auth/login` — verify credentials (401 on failure, without leaking whether the user exists), issue a JWT.
+  - `GET /auth/health` — liveness.
+- Stateless: no per-process state; horizontally scalable with zero coordination.
+- It is the **only** service that handles raw passwords (bcrypt hashing) and the **only** service that mints tokens. Every other service merely *verifies* tokens with the shared secret. Isolating credential handling here limits the blast radius if the larger `api-service` is compromised, and lets the credential path be deployed independently of feature work.
+
+### 3.3 api-service (FastAPI)
+
+- REST endpoints (channel and message domain; JWT-verified per request):
   - `GET /api/channels`, `POST /api/channels`, `POST /api/channels/{id}/join` — channel CRUD.
   - `GET /api/channels/{id}/messages?before=<id>&limit=50` — paginated history.
   - `GET /api/users/me` — profile.
-- Stateless: no per-process state; every request stands alone with JWT verification.
+  - `GET /api/health` — liveness.
+- Stateless: every request stands alone with JWT verification (using `shared.auth`); no session store.
 - Horizontally scalable with zero coordination.
+- *Current state:* scaffolded — `/api/health` and a stub `/api/channels` list. The endpoints above are the target surface.
 
-### 3.3 chat-service (FastAPI WebSocket endpoint)
+### 3.4 chat-service (FastAPI WebSocket endpoint)
 
 - Endpoint: `/ws` (WebSocket upgrade).
 - On connection: verifies JWT, registers the socket in an in-memory map, subscribes the socket's process to the Redis pub/sub channels for the user's joined channels.
@@ -101,7 +113,7 @@ This split is deliberate: it gives the project two distinct scaling stories rath
 - Handles outbound fanout: receives from Redis pub/sub, delivers to all locally-connected sockets subscribed to that channel.
 - Handles reconnect with `last_seen_message_id`: replays missed messages from Postgres before resuming live stream.
 
-### 3.4 PostgreSQL (durable storage)
+### 3.5 PostgreSQL (durable storage)
 
 The source of truth for all persistent state.
 
@@ -146,7 +158,7 @@ create index on channel_members (user_id);        -- "which channels does user X
 
 **Why the `messages.id` monotonic `bigserial` matters:** Postgres assigns IDs strictly increasing inside a single database process. This is the system's ordering authority. Clients sort by this ID, never by wall-clock timestamps, which avoids clock-skew and concurrency ordering issues.
 
-### 3.5 Redis (cache, pub/sub, presence)
+### 3.6 Redis (cache, pub/sub, presence)
 
 Redis wears three hats at MVP scale.
 
@@ -156,7 +168,7 @@ Redis wears three hats at MVP scale.
 
 **Cache.** User profile lookups, channel metadata, JWT blacklist (if logout is implemented).
 
-### 3.6 Next.js frontend
+### 3.7 Next.js frontend
 
 - Server-rendered for the marketing/login pages (if any); client-side for the chat view.
 - Uses `react-query` (or similar) for REST data.
@@ -170,21 +182,21 @@ Redis wears three hats at MVP scale.
 ```mermaid
 sequenceDiagram
     actor U as User browser
-    participant TGW as Traefik
-    participant API as api-service (any replica)
+    participant GW as nginx gateway
+    participant AUTH as auth-service (any replica)
     participant PG as PostgreSQL
 
-    U->>TGW: POST /api/auth/login {username, password}
-    TGW->>API: forward
-    API->>PG: SELECT users WHERE username = ?
-    PG-->>API: row with password_hash
-    API->>API: verify password, sign JWT
-    API-->>TGW: 200 {jwt}
-    TGW-->>U: 200 {jwt}
+    U->>GW: POST /auth/login {username, password}
+    GW->>AUTH: forward
+    AUTH->>PG: SELECT users WHERE username = ?
+    PG-->>AUTH: row with password_hash
+    AUTH->>AUTH: verify password (bcrypt), sign JWT
+    AUTH-->>GW: 200 {jwt}
+    GW-->>U: 200 {jwt}
     U->>U: store JWT
 ```
 
-**Consistency:** strongly consistent (Postgres read). Stateless: any api-service replica can serve this.
+**Consistency:** strongly consistent (Postgres read). Stateless: any auth-service replica can serve this.
 
 ### 4.2 Sending a message (multi-node fanout)
 
@@ -259,7 +271,7 @@ sequenceDiagram
 
     Note over WSA: kubectl delete pod chat-service-A
     WSA--xA: connection drops
-    Note over A: reconnect routed by Traefik to WSB or a new replica
+    Note over A: reconnect routed by the gateway to WSB or a new replica
     A->>WSB: WS connect {last_seen_id}
     WSB->>A: backlog replay, then live stream
     B->>WSB: send "and now?"
@@ -288,45 +300,53 @@ No messages lost, no users stuck. This is the "kill-a-node" moment of the final 
 ```mermaid
 flowchart LR
     subgraph Host["Developer machine"]
+        FE["next.js dev server"]
         subgraph DC["docker-compose network"]
-            TGW["traefik"]
-            API1["api-service x2"]
-            WS1["chat-service x2"]
+            GW["nginx gateway"]
+            AUTH["auth-service"]
+            API["api-service"]
+            WS["chat-service"]
+            MIG["migrate (one-shot)"]
             PG["postgres"]
             RD["redis"]
-            FE["next.js dev server"]
         end
     end
 
     Dev["Developer<br/>localhost"] -->|":3000"| FE
-    Dev -->|":8080"| TGW
-    TGW --> API1
-    TGW -.-> WS1
-    API1 --> PG
-    WS1 --> PG
-    API1 --> RD
-    WS1 <--> RD
+    FE -->|":8080"| GW
+    GW --> AUTH
+    GW --> API
+    GW -.-> WS
+    MIG --> PG
+    AUTH --> PG
+    API --> PG
+    WS --> PG
+    API --> RD
+    WS <--> RD
 ```
 
-- Brought up with a single `docker compose up --build`.
-- Frontend hot-reloads from the host's file system.
-- Two replicas each of api-service and chat-service, already sufficient to exercise the multi-node fanout path during development.
-- Data volumes persist Postgres and Redis across restarts.
+- Backend stack brought up with a single `docker compose up --build`; the Next.js dev server runs on the host (`pnpm dev`) for fast hot-reload and talks to the stack through the gateway on `:8080`.
+- A one-shot `migrate` service applies the schema (`alembic upgrade head`) and exits before the app services start (`depends_on: condition: service_completed_successfully`).
+- Backend services are reachable only through the gateway — they use `expose`, not host `ports`.
+- `chat-service` can be scaled (`docker compose up --scale chat-service=3`) to exercise the multi-node Redis fanout path during development.
+- Data volumes persist Postgres and Redis across restarts (`docker compose down -v` to wipe).
 
 ### 6.2 Deployment demo — Kubernetes (k3d)
 
 ```mermaid
 flowchart TB
     subgraph Cluster["k3d cluster"]
-        Ing["Traefik Ingress"]
+        Ing["Ingress<br/>(k3d's bundled Traefik controller)"]
 
         subgraph NS["chat namespace"]
+            AUTHD["auth-service Deployment<br/>replicas 2"]
             APID["api-service Deployment<br/>replicas 2"]
             WSD["chat-service Deployment<br/>replicas 3"]
             PGSS["postgres StatefulSet<br/>replicas 1"]
             RDSS["redis StatefulSet<br/>replicas 1"]
             FEDP["frontend Deployment<br/>replicas 1"]
 
+            AUTHS["auth-service Service"]
             APIS["api-service Service"]
             WSS["chat-service Service"]
             PGS["postgres Service"]
@@ -334,16 +354,19 @@ flowchart TB
             FES["frontend Service"]
         end
 
+        Ing -->|"/auth/*"| AUTHS
         Ing -->|"/api/*"| APIS
         Ing -->|"/ws"| WSS
         Ing -->|"/"| FES
 
+        AUTHS --> AUTHD
         APIS --> APID
         WSS --> WSD
         PGS --> PGSS
         RDS --> RDSS
         FES --> FEDP
 
+        AUTHD --> PGS
         APID --> PGS
         APID --> RDS
         WSD --> PGS
@@ -352,8 +375,9 @@ flowchart TB
 ```
 
 - Manifests live in `infra/k8s/`.
+- The Compose gateway (nginx) is replaced by a Kubernetes **Ingress** resource. k3d ships Traefik as its default ingress controller, so the Ingress is satisfied without installing anything — a clean illustration that "gateway" is a *role* fulfilled differently by each orchestrator (an explicit nginx container in Compose, a platform-native Ingress in Kubernetes).
 - Postgres and Redis as StatefulSets with persistent volume claims.
-- api-service and chat-service as Deployments — `kubectl scale` demonstrably increases replicas.
+- auth-service, api-service, and chat-service as Deployments — `kubectl scale` demonstrably increases replicas.
 - Liveness and readiness probes on every backend Deployment.
 - A `NOTES.md` in the manifests directory documents the demo commands (`kubectl get pods`, `kubectl delete pod`, etc.).
 
@@ -377,9 +401,13 @@ Redis fills three roles cleanly at MVP scale: cache, ephemeral state with TTL (p
 - **V2 introduces RabbitMQ** once there is genuine async durable work (emailing on @mention, processing file uploads). RabbitMQ adds durable queues, acks, and retries — a distinctly different distributed pattern from Redis pub/sub, which is what makes it worth introducing as a teaching moment rather than just an operational addition.
 - **Kafka is a V3-only consideration** in the context of federation or event sourcing, which are not in the deliverable scope.
 
-### Gateway — Traefik
+### Gateway — nginx (Compose) / Ingress (Kubernetes)
 
-Traefik is declarative, reads Docker labels directly, doubles as a Kubernetes Ingress controller without reconfiguration, and handles TLS termination. Kong is heavier for no benefit at this scale; a custom FastAPI gateway would require implementing routing, auth-forwarding, and rate-limiting from scratch, none of which teaches anything specific to distributed systems.
+The gateway is a *role* — single ingress, path-based routing, CORS, TLS termination, later rate limiting — fulfilled by different tools in each environment.
+
+In Docker Compose the gateway is **nginx** with a single explicit `nginx.conf`. We initially used Traefik, attracted by its label-based autodiscovery, but at a three-service scale that model cost more than it returned: a mounted Docker socket, a pinned Docker API version, and routing rules scattered across container labels rather than stated in one place. nginx inverts that trade-off — the whole routing and CORS surface is one readable file, which matters for a project that has to *explain* its gateway, not just run it. Kong would be heavier for no benefit at this scale; a custom FastAPI gateway would mean implementing routing, auth-forwarding, and rate-limiting from scratch, none of which teaches anything specific to distributed systems.
+
+In Kubernetes the gateway role is filled by a native **Ingress** resource. k3d bundles Traefik as its default ingress controller, so no extra component is installed. The Compose-to-Kubernetes shift in how the *same* gateway role is implemented is itself a point worth narrating in the presentation.
 
 ### Service discovery — platform-native
 
