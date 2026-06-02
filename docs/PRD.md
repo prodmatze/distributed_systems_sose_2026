@@ -53,7 +53,7 @@ The project is divided into three strictly-ordered tiers. Each tier is self-cont
 - Chat service runs as N horizontally-scaled instances behind a load balancer.
 - Cross-node message fanout via Redis pub/sub.
 - Postgres as the single durable source of truth, with monotonic IDs as the message-order authority.
-- Traefik as the API gateway and load balancer.
+- nginx as the API gateway / reverse proxy (single ingress, path-based routing, CORS).
 - Docker Compose for local development.
 - Kubernetes manifests (targeting k3d or minikube) for the final deployment demo.
 - GitHub Actions CI running build + tests on every push.
@@ -80,7 +80,7 @@ The project is divided into three strictly-ordered tiers. Each tier is self-cont
 - MinIO (S3-compatible object storage) for blob uploads.
 - Structured logging across services.
 - Prometheus metrics and a simple Grafana dashboard.
-- Rate limiting at the Traefik gateway.
+- Rate limiting at the nginx gateway.
 - Live demonstration of `kubectl scale` adjusting chat service replicas under load.
 
 ### 4.3 Tier 3 — V3 (ambitious menu, optional)
@@ -108,9 +108,9 @@ Stories are numbered for traceability from issues and PRs. Format: `US-xxx`.
 #### Authentication and identity
 
 - **US-001** — As a new user, I want to register an account with a username, email, and password so that I can start using the chat.
-  *Acceptance:* `POST /api/auth/register` returns 201 with a JWT; duplicate username returns 409; password is stored hashed, never plain.
+  *Acceptance:* `POST /auth/register` returns 201 with a JWT; duplicate username returns 409; password is stored hashed, never plain.
 - **US-002** — As a returning user, I want to log in with my credentials and receive a session token so that I can resume my conversations.
-  *Acceptance:* `POST /api/auth/login` returns 200 with JWT on correct credentials; 401 on wrong credentials.
+  *Acceptance:* `POST /auth/login` returns 200 with JWT on correct credentials; 401 on wrong credentials.
 - **US-003** — As a logged-in user, I want my session to persist across page refreshes so that I don't have to log in repeatedly.
   *Acceptance:* JWT stored in httpOnly cookie or secure storage; valid for a configurable duration (default 24h).
 
@@ -238,7 +238,7 @@ A brief summary — full rationale for each choice lives in [`ARCHITECTURE.md`](
 | Durable storage | PostgreSQL | ACID guarantees; monotonic IDs for ordering |
 | Cache + pub/sub + presence | Redis | Single tool covers three distinct roles at MVP scale |
 | Async / durable jobs (V2) | RabbitMQ | Acknowledged, retryable queues for notification and file-processing work |
-| API gateway | Traefik | Declarative, Docker-native, doubles as Kubernetes ingress |
+| API gateway | nginx (Compose) / Ingress (k8s) | Single explicit config; routing + CORS legible in one file. k3d's bundled Traefik fills the ingress role in Kubernetes |
 | Local dev | Docker Compose | Single-command spin-up |
 | Deployment | Kubernetes (k3d) | Demonstrates orchestration and self-healing |
 | CI/CD | GitHub Actions | Standard, free for this scale |
@@ -251,7 +251,7 @@ A rough, aggressive-but-feasible plan. Re-baselined after Week 3.
 |---|---|---|
 | Planning | 1–2 | This PRD, `ARCHITECTURE.md`, GitHub project board populated with MVP issues, skeleton repo structure |
 | MVP foundation | 3–5 | Auth service, channel CRUD, single-node WebSocket chat, minimal frontend |
-| MVP distributed | 6–7 | Multi-node Redis fanout, Traefik load balancer, reconnect + backfill, kill-a-node proof |
+| MVP distributed | 6–7 | Multi-node Redis fanout, nginx gateway, reconnect + backfill, kill-a-node proof |
 | MVP polish | 8 | CI green, Kubernetes manifests, end-to-end deployment dry run |
 | V2 | 9–11 | Selected V2 features (prioritized against remaining time) |
 | Presentation prep | 12–14 | Demo script, slides, architecture walkthrough rehearsal |

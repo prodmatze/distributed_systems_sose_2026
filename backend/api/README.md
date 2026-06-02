@@ -1,21 +1,19 @@
 # api-service
 
-FastAPI REST service. Stateless — any replica can serve any request.
+FastAPI REST service for the channel and message domain. Stateless — any replica can serve any request, verifying the JWT per request (auth tokens are issued by the separate [`auth-service`](../auth/)).
 
-**Responsibilities** (see [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) §3.2):
+**Responsibilities** (see [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) §3.3):
 
-- `POST /api/auth/register`, `POST /api/auth/login` — JWT issuance.
 - `GET /api/channels`, `POST /api/channels`, `POST /api/channels/{id}/join` — channel CRUD.
-- `GET /api/channels/{id}/messages` — paginated history.
+- `GET /api/channels/{id}/messages?before=<id>&limit=50` — paginated history.
 - `GET /api/users/me` — profile.
+- `GET /api/health` — liveness.
 
 ## Current state
 
 Scaffolded, not yet feature-complete.
 
-- `src/api/main.py` — `FastAPI()` app with `/api/health`, a stub `/api/channels` list, and a stub `/api/auth/register` that defines the request/response shape but does not yet persist or hash.
-- `src/api/schemas.py` — `RegisterRequest`, `LoginRequest`, `UserResponse`, `TokenResponse` Pydantic models.
-- DB access through `shared.db.get_session` and `shared.models` (already wired in the shared package).
-- JWT + password helpers in `shared.auth` are **not yet implemented** — the next blocker for landing real auth.
+- `src/api/main.py` — `FastAPI()` app with `/api/health` and a stub `/api/channels` that returns a hardcoded list. The endpoints above are the target surface.
+- DB access will go through `shared.db.get_session` and `shared.models`; JWT verification through `shared.auth.decode_access_token`. These helpers already exist in the shared package — the work remaining is wiring the channel/message/profile endpoints on top of them.
 
-For how to add endpoints in this repo (layout rules, route anatomy, routers, JWT, WebSocket shape), see [`learning-docs/05-fastapi-development-guide.md`](../../learning-docs/05-fastapi-development-guide.md).
+For how to add endpoints in this repo (layout rules, route anatomy, routers, JWT, the WebSocket shape), see [`learning-docs/05-fastapi-development-guide.md`](../../learning-docs/05-fastapi-development-guide.md).

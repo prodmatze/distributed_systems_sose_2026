@@ -47,6 +47,7 @@ services:
     build:
       context: ../../backend
       dockerfile: api/Dockerfile
+    restart: unless-stopped
     # No host port — reachable only via the nginx gateway on the internal network.
     expose:
       - "8000"
@@ -66,6 +67,7 @@ services:
     build:
       context: ../../backend
       dockerfile: auth/Dockerfile
+    restart: unless-stopped
     expose:
       - "8000"
     environment:

@@ -59,6 +59,8 @@ class Message(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_messages_channel_id_id_desc", "channel_id", "id", postgresql_using="btree"),
-    )
+    # Composite index for channel history queries (WHERE channel_id = ?
+    # ORDER BY id DESC LIMIT N). Postgres scans a btree backward just as
+    # efficiently as forward, so an ascending index is optimal here — a
+    # descending index would buy nothing.
+    __table_args__ = (Index("ix_messages_channel_id_id", "channel_id", "id"),)
