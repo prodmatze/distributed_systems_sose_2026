@@ -1,12 +1,12 @@
 [project]
-name = "chorus-auth"
+name = "chorus-chat"
 version = "0.1.0"
-description = "Chorus auth service: registration, login, JWT issuance."
+description = "Chorus chat service: WebSocket fanout, Redis pub/sub bridge, Postgres-backed history replay."
 requires-python = ">=3.12"
 dependencies = [
-    "chorus-shared>=0.1.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
+    "redis>=5.0.0",
 ]
 
 [build-system]
