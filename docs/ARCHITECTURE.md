@@ -212,17 +212,20 @@ sequenceDiagram
     Note over A,WSA: Alice connected to WSA
     Note over B,WSB: Bob connected to WSB
 
-    A->>WSA: WS send {channel: "general", body: "hi"}
-    WSA->>WSA: validate JWT, check membership
+    A->>WSA: WS send {channel_id: 1, body: "hi"}
+    WSA->>WSA: check membership (JWT verified at connect)
     WSA->>PG: INSERT INTO messages RETURNING id
     PG-->>WSA: {id: 42, created_at: ...}
-    WSA->>RD: PUBLISH chan:general {id: 42, sender: alice, body: "hi", ...}
-    WSA-->>A: WS ack {id: 42}
-    RD->>WSB: deliver {id: 42, ...}
+    WSA->>RD: PUBLISH chan:1 {id: 42, sender: alice, body: "hi", ...}
+    RD-->>WSA: deliver {id: 42, ...}
+    RD-->>WSB: deliver {id: 42, ...}
+    WSA->>A: WS push {id: 42, ...}
     WSB->>B: WS push {id: 42, body: "hi", sender: alice}
 ```
 
 **Key observation:** Alice and Bob are on *different* chat-service instances, yet message delivery works. The coupling between instances is Redis pub/sub — neither instance needs to know the other exists.
+
+**One delivery path, no separate ack.** Every chat-service instance — *including the sender's own* — is subscribed to `chan:*`, so Alice receives her own message back through the same Redis fanout that delivers it to Bob (note `RD-->>WSA` above). There is no separate sender acknowledgement: every client, local or remote, sees one identically-ordered stream keyed by the Postgres `id`. JWT is verified once at connect; per-message the service only re-checks channel membership.
 
 **Consistency:**
 - Postgres write: strongly consistent; the message and its ID are durable and ordered before fanout begins.
