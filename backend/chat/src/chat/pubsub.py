@@ -59,32 +59,39 @@ class PubSubBridge:
         await self._redis.publish(f"{CHANNEL_PREFIX}{channel_id}", json.dumps(payload))
 
     async def _listen(self) -> None:
-        # Resilient loop: a dropped Redis connection (restart, network blip) must
-        # NOT silently kill fanout. On any error we log, back off, and resubscribe.
-        # Without this, the listener task dies unobserved and the whole replica
-        # stops delivering messages until it is restarted.
+        # Resilient poll loop. Two things make it safe:
+        #  1. It REUSES the same pubsub object. Recreating it (self._redis.pubsub())
+        #     on every iteration leaks a Redis connection each time and exhausts
+        #     the pool within seconds — never do that.
+        #  2. It polls with a timeout, so an idle or briefly-closed stream is a
+        #     no-op `None`, not a tight spin. On a real error we log, back off,
+        #     and resubscribe on the SAME pubsub (redis-py reconnects it).
+        # This keeps fanout alive across redis blips without the listener dying
+        # silently or leaking connections.
         while True:
             try:
-                async for raw in self._pubsub.listen():
-                    if raw.get("type") != "pmessage":
-                        continue  # skip (p)subscribe confirmations
-                    try:
-                        payload = json.loads(raw["data"])
-                        channel_id = int(payload["channel_id"])
-                    except (ValueError, TypeError, KeyError):
-                        logger.warning("dropping malformed pubsub payload: %r", raw.get("data"))
-                        continue
-                    await self._manager.fanout(channel_id, payload)
-                logger.warning("pubsub stream ended; resubscribing")
+                raw = await self._pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
             except asyncio.CancelledError:
                 raise  # clean shutdown via stop()
             except Exception:
-                logger.exception("pubsub listener error; resubscribing after backoff")
+                logger.exception("pubsub error; backing off then resubscribing")
                 await asyncio.sleep(1.0)
-            # (re)establish the subscription before looping back into listen()
+                try:
+                    await self._pubsub.psubscribe(PATTERN)
+                except Exception:
+                    logger.exception("pubsub resubscribe failed")
+                continue
+
+            if raw is None:
+                continue  # idle timeout — nothing was published
+            if raw.get("type") != "pmessage":
+                continue
             try:
-                self._pubsub = self._redis.pubsub()
-                await self._pubsub.psubscribe(PATTERN)
-            except Exception:
-                logger.exception("pubsub resubscribe failed; retrying after backoff")
-                await asyncio.sleep(1.0)
+                payload = json.loads(raw["data"])
+                channel_id = int(payload["channel_id"])
+            except (ValueError, TypeError, KeyError):
+                logger.warning("dropping malformed pubsub payload: %r", raw.get("data"))
+                continue
+            await self._manager.fanout(channel_id, payload)
