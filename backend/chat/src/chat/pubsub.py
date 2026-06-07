@@ -59,13 +59,32 @@ class PubSubBridge:
         await self._redis.publish(f"{CHANNEL_PREFIX}{channel_id}", json.dumps(payload))
 
     async def _listen(self) -> None:
-        async for raw in self._pubsub.listen():
-            if raw.get("type") != "pmessage":
-                continue  # skip (p)subscribe confirmations
+        # Resilient loop: a dropped Redis connection (restart, network blip) must
+        # NOT silently kill fanout. On any error we log, back off, and resubscribe.
+        # Without this, the listener task dies unobserved and the whole replica
+        # stops delivering messages until it is restarted.
+        while True:
             try:
-                payload = json.loads(raw["data"])
-                channel_id = int(payload["channel_id"])
-            except (ValueError, TypeError, KeyError):
-                logger.warning("dropping malformed pubsub payload: %r", raw.get("data"))
-                continue
-            await self._manager.fanout(channel_id, payload)
+                async for raw in self._pubsub.listen():
+                    if raw.get("type") != "pmessage":
+                        continue  # skip (p)subscribe confirmations
+                    try:
+                        payload = json.loads(raw["data"])
+                        channel_id = int(payload["channel_id"])
+                    except (ValueError, TypeError, KeyError):
+                        logger.warning("dropping malformed pubsub payload: %r", raw.get("data"))
+                        continue
+                    await self._manager.fanout(channel_id, payload)
+                logger.warning("pubsub stream ended; resubscribing")
+            except asyncio.CancelledError:
+                raise  # clean shutdown via stop()
+            except Exception:
+                logger.exception("pubsub listener error; resubscribing after backoff")
+                await asyncio.sleep(1.0)
+            # (re)establish the subscription before looping back into listen()
+            try:
+                self._pubsub = self._redis.pubsub()
+                await self._pubsub.psubscribe(PATTERN)
+            except Exception:
+                logger.exception("pubsub resubscribe failed; retrying after backoff")
+                await asyncio.sleep(1.0)
