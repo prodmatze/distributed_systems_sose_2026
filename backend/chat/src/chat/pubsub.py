@@ -59,9 +59,35 @@ class PubSubBridge:
         await self._redis.publish(f"{CHANNEL_PREFIX}{channel_id}", json.dumps(payload))
 
     async def _listen(self) -> None:
-        async for raw in self._pubsub.listen():
+        # Resilient poll loop. Two things make it safe:
+        #  1. It REUSES the same pubsub object. Recreating it (self._redis.pubsub())
+        #     on every iteration leaks a Redis connection each time and exhausts
+        #     the pool within seconds — never do that.
+        #  2. It polls with a timeout, so an idle or briefly-closed stream is a
+        #     no-op `None`, not a tight spin. On a real error we log, back off,
+        #     and resubscribe on the SAME pubsub (redis-py reconnects it).
+        # This keeps fanout alive across redis blips without the listener dying
+        # silently or leaking connections.
+        while True:
+            try:
+                raw = await self._pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+            except asyncio.CancelledError:
+                raise  # clean shutdown via stop()
+            except Exception:
+                logger.exception("pubsub error; backing off then resubscribing")
+                await asyncio.sleep(1.0)
+                try:
+                    await self._pubsub.psubscribe(PATTERN)
+                except Exception:
+                    logger.exception("pubsub resubscribe failed")
+                continue
+
+            if raw is None:
+                continue  # idle timeout — nothing was published
             if raw.get("type") != "pmessage":
-                continue  # skip (p)subscribe confirmations
+                continue
             try:
                 payload = json.loads(raw["data"])
                 channel_id = int(payload["channel_id"])

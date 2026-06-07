@@ -1,6 +1,6 @@
 """chat-service — FastAPI WebSocket endpoint for real-time messaging.
 
-See docs/ARCHITECTURE.md §3.3 and §4.2-§4.4. The message lifecycle:
+See docs/ARCHITECTURE.md §3.4 and §4.2-§4.4. The message lifecycle:
 
     client --ws--> this replica
         verify JWT, check membership

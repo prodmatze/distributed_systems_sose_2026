@@ -82,6 +82,26 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  chat:
+    build:
+      context: ../../backend
+      dockerfile: chat/Dockerfile
+    restart: unless-stopped
+    # Stateful WebSocket tier. No host port — reached only via the gateway.
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   gateway:
     image: nginx:alpine
     restart: unless-stopped
@@ -92,6 +112,7 @@ services:
     depends_on:
       - api
       - auth
+      - chat
 
 volumes:
   postgres_data:

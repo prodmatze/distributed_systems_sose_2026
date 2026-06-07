@@ -93,3 +93,81 @@ export function clearSession() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
 }
+
+// --- Channels & messages -------------------------------------------------
+
+export type Channel = {
+  id: number
+  name: string
+  description: string | null
+  member_count: number
+  created_at: string
+}
+
+export type Message = {
+  id: number
+  channel_id: number
+  sender_id: number
+  sender_username: string
+  body: string
+  created_at: string
+}
+
+// Like `request`, but attaches the bearer token. A 401 means the session is
+// dead, so clear it — the UI guard will then bounce to /login.
+async function authed<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken()
+  try {
+    return await request<T>(path, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) clearSession()
+    throw err
+  }
+}
+
+export async function getMe(): Promise<User> {
+  return authed<User>("/api/users/me")
+}
+
+export async function getChannels(): Promise<Channel[]> {
+  return authed<Channel[]>("/api/channels")
+}
+
+export async function createChannel(payload: {
+  name: string
+  description?: string
+}): Promise<Channel> {
+  return authed<Channel>("/api/channels", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function joinChannel(channelId: number): Promise<Channel> {
+  return authed<Channel>(`/api/channels/${channelId}/join`, { method: "POST" })
+}
+
+export async function getMessages(
+  channelId: number,
+  opts?: { before?: number; limit?: number },
+): Promise<Message[]> {
+  const q = new URLSearchParams()
+  if (opts?.before) q.set("before", String(opts.before))
+  if (opts?.limit) q.set("limit", String(opts.limit))
+  const qs = q.toString()
+  return authed<Message[]>(
+    `/api/channels/${channelId}/messages${qs ? `?${qs}` : ""}`,
+  )
+}
+
+// WebSocket URL for the chat gateway, derived from the REST origin.
+export function wsUrl(token: string, lastSeenId = 0): string {
+  const base = API_URL.replace(/^http/, "ws")
+  return `${base}/ws?token=${encodeURIComponent(token)}&last_seen_id=${lastSeenId}`
+}
