@@ -103,7 +103,7 @@ The identity and credentials service, and a deliberate **security boundary**.
   - `GET /api/health` — liveness.
 - Stateless: every request stands alone with JWT verification (using `shared.auth`); no session store.
 - Horizontally scalable with zero coordination.
-- *Current state:* scaffolded — `/api/health` and a stub `/api/channels` list. The endpoints above are the target surface.
+- *Status:* implemented — all endpoints above are live and used by the frontend.
 
 ### 3.4 chat-service (FastAPI WebSocket endpoint)
 

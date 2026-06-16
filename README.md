@@ -48,9 +48,9 @@ Full requirements, user stories, and tier rationale in [`docs/PRD.md`](./docs/PR
 ├── backend/
 │   ├── shared/               # Internal package: SQLAlchemy models, Alembic, settings, auth/JWT helpers
 │   ├── auth/                 # FastAPI auth service: register, login, JWT issuance
-│   ├── api/                  # FastAPI REST service: channels, history, profiles (scaffolded)
-│   └── chat/                 # FastAPI WebSocket service: realtime fanout (implemented; wiring into the stack tracked in #13)
-├── frontend/                 # Next.js application (login/register wired up)
+│   ├── api/                  # FastAPI REST service: channels, history, profiles
+│   └── chat/                 # FastAPI WebSocket service: realtime fanout via Redis pub/sub
+├── frontend/                 # Next.js application (login/register + channel chat)
 └── infra/
     ├── nginx/                # Gateway config (nginx.conf) for the Compose stack
     ├── compose/              # Docker Compose stack for local dev
@@ -61,7 +61,7 @@ The backend is split into **two service classes** — a stateless REST tier (`au
 
 ## Running locally
 
-The backend stack — Postgres, Redis, the one-shot `migrate` job, the `auth` and `api` services, and the nginx gateway — runs with one command:
+The backend stack — Postgres, Redis, the one-shot `migrate` job, the `auth`/`api`/`chat` services, and the nginx gateway — runs with one command:
 
 ```bash
 cp infra/compose/.env.example infra/compose/.env
@@ -81,7 +81,8 @@ Endpoints:
 - Frontend: `http://localhost:3000`
 - Gateway (single ingress): `http://localhost:8080`
   - `POST /auth/register`, `POST /auth/login` → auth-service
-  - `GET /api/health`, `GET /api/channels` → api-service
+  - `GET/POST /api/channels`, `GET /api/channels/{id}/messages`, `GET /api/users/me` → api-service
+  - `GET /ws` (WebSocket) → chat-service
 
 Smoke test the gateway:
 
