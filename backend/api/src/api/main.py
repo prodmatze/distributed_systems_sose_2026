@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 
+from api.routers import channels, users
+
 app = FastAPI(title="Chorus API")
+
+app.include_router(channels.router)
+app.include_router(users.router)
 
 
 @app.get("/api/health")
 async def health_check():
     return {"ok": True}
-
-
-@app.get("/api/channels")
-async def get_channels():
-    return ["Channel_1", "Channel_2", "Channel_3"]

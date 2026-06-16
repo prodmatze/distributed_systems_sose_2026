@@ -49,7 +49,7 @@ Full requirements, user stories, and tier rationale in [`docs/PRD.md`](./docs/PR
 │   ├── shared/               # Internal package: SQLAlchemy models, Alembic, settings, auth/JWT helpers
 │   ├── auth/                 # FastAPI auth service: register, login, JWT issuance
 │   ├── api/                  # FastAPI REST service: channels, history, profiles (scaffolded)
-│   └── chat/                 # FastAPI WebSocket service: realtime fanout (in progress)
+│   └── chat/                 # FastAPI WebSocket service: realtime fanout (implemented; wiring into the stack tracked in #13)
 ├── frontend/                 # Next.js application (login/register wired up)
 └── infra/
     ├── nginx/                # Gateway config (nginx.conf) for the Compose stack

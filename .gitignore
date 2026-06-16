@@ -24,3 +24,7 @@ __pycache__/
 .venv/
 .venv-*/
 .pytest_cache/
+
+# agents, claude-stuff, etc.
+.claude/
+.agents/
