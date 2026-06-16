@@ -1,5 +1,7 @@
 notes.md
 CLAUDE.md
+.agents/
+.claude/
 
 # Local environment files — derived from .env.example, never committed
 .env
