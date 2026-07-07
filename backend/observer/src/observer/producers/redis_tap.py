@@ -62,20 +62,21 @@ def translate(
 
 async def run_redis_tap(redis_factory, bus: Bus) -> None:
     redis = redis_factory()
+    pubsub = None
     try:
-        await redis.config_set("notify-keyspace-events", "Eg$xn")
-    except Exception:  # noqa: BLE001 — compose sets it declaratively too
-        logger.warning("could not CONFIG SET notify-keyspace-events (non-fatal)")
+        try:
+            await redis.config_set("notify-keyspace-events", "Eg$xn")
+        except Exception:  # noqa: BLE001 — compose sets it declaratively too
+            logger.warning("could not CONFIG SET notify-keyspace-events (non-fatal)")
 
-    pubsub = redis.pubsub()
-    await pubsub.psubscribe(CHAT_PATTERN, KEYEVENT_PATTERN)
-    logger.info("redis tap subscribed to %s, %s", CHAT_PATTERN, KEYEVENT_PATTERN)
+        pubsub = redis.pubsub()
+        await pubsub.psubscribe(CHAT_PATTERN, KEYEVENT_PATTERN)
+        logger.info("redis tap subscribed to %s, %s", CHAT_PATTERN, KEYEVENT_PATTERN)
 
-    known_online: set[int] = set()
-    tokens, last_refill = _BURST, time.monotonic()
-    summary_count, last_flush = 0, time.monotonic()
+        known_online: set[int] = set()
+        tokens, last_refill = _BURST, time.monotonic()
+        summary_count, last_flush = 0, time.monotonic()
 
-    try:
         while True:
             raw = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
             now = time.monotonic()
@@ -108,5 +109,6 @@ async def run_redis_tap(redis_factory, bus: Bus) -> None:
 
             await bus.emit(type=type_, service=service, payload=payload)
     finally:
-        await pubsub.aclose()
+        if pubsub is not None:
+            await pubsub.aclose()
         await redis.aclose()
