@@ -17,8 +17,10 @@ from redis.asyncio import Redis
 
 from observer.bus import Bus
 from observer.hub import Hub
+from observer.producers.redis_tap import run_redis_tap
 from observer.settings import settings
 from observer.state import WorldState
+from observer.supervisor import supervise
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("observer.main")
@@ -42,7 +44,12 @@ async def lifespan(app: FastAPI):
     app.state.hub = hub
 
     tasks = [asyncio.create_task(hub.run(), name="hub")]
-    # Producers attach here in later tasks (supervisor.spawn_all).
+    tasks.append(
+        asyncio.create_task(
+            supervise("redis_tap", lambda: run_redis_tap(_make_redis, bus), bus),
+            name="producer-redis_tap",
+        )
+    )
     try:
         yield
     finally:
