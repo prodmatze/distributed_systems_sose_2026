@@ -3,6 +3,9 @@ name: chorus
 services:
   postgres:
     image: postgres:16
+    # observability: pg_stat_statements needs to be preloaded at server start.
+    # Inert for the app; the observer creates the extension and reads the view.
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -20,6 +23,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    # observability: keyspace notifications for presence:* transitions
+    # (E=keyevent channel, g=generic del/expire, $=string set, x=expired, n=new).
+    # Inert for the app; the observer subscribes to __keyevent@0__:*.
+    command: redis-server --notify-keyspace-events 'Eg$$xn'
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -90,6 +97,12 @@ services:
     # Stateful WebSocket tier. No host port — reached only via the gateway.
     expose:
       - "8000"
+    # Default replica count so a bare `docker compose up` (no --scale flag)
+    # still starts all 3 named upstreams nginx pins to (chorus-chat-1..3 in
+    # infra/nginx/nginx.conf); the gateway refuses to route without them.
+    # Agrees with the Makefile's `--scale chat=$(CHAT_REPLICAS)` — same value.
+    deploy:
+      replicas: 3
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
@@ -113,6 +126,54 @@ services:
       - api
       - auth
       - chat
+
+  # ── observability (opt-in: --profile observability) ────────────────────
+  # None of these run in the default stack. The observer is a pure consumer:
+  # killing it must never affect the app (that property is test-enforced).
+
+  socket-proxy:
+    # tecnativa/docker-socket-proxy:0.4 doesn't exist as a bare tag on Docker
+    # Hub (only the v-prefixed releases do); v0.4.2 is the nearest available
+    # 0.4.x and is what "latest" currently resolves to.
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1        # GET /containers/* (list, inspect, logs, stats)
+      POST: 0              # read-only: every mutating verb 403s (widened in Plan C)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # No published ports: reachable only as socket-proxy:2375 on the compose network.
+
+  observer:
+    build:
+      context: ../../backend
+      dockerfile: observer/Dockerfile
+    profiles: ["observability"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:8000"   # localhost-only by design (dev tool, no auth)
+    environment:
+      OBS_REDIS_URL: redis://redis:6379/0
+      OBS_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      OBS_DOCKER_HOST: http://socket-proxy:2375
+      OBS_GATEWAY_CONTAINER: chorus-gateway-1
+      OBS_COMPOSE_PROJECT: chorus
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      socket-proxy:
+        condition: service_started
+
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.19.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16686:16686"   # UI (localhost only)
+    # OTLP 4317/4318 stay compose-internal; services start exporting in Plan C.
 
 volumes:
   postgres_data:

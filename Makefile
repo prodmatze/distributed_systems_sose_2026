@@ -8,7 +8,7 @@ COMPOSE  := docker compose -f infra/compose/docker-compose.yml --env-file infra/
 FRONTEND := frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help dev backend frontend up down stop restart logs ps build rebuild migrate health clean install setup
+.PHONY: help dev backend frontend up down stop restart logs ps build rebuild migrate health clean install setup obs-up obs-down obs-logs obs-smoke
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -69,3 +69,17 @@ setup: ## Create infra/compose/.env from the example if it does not exist
 	else \
 		echo "infra/compose/.env already exists — nothing to do"; \
 	fi
+
+COMPOSE_OBS := $(COMPOSE) --profile observability
+
+obs-up: ## Start the stack WITH the observability layer (observer :8090, jaeger :16686)
+	$(COMPOSE_OBS) up -d --build --scale chat=$(CHAT_REPLICAS)
+
+obs-down: ## Stop the stack including observability services
+	$(COMPOSE_OBS) down
+
+obs-logs: ## Follow observer logs
+	$(COMPOSE_OBS) logs -f observer
+
+obs-smoke: ## Assert live events arrive on the observer WebSocket
+	backend/observer/.venv/bin/python backend/observer/scripts/obs_smoke.py
