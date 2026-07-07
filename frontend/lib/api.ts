@@ -167,7 +167,11 @@ export async function getMessages(
 }
 
 // WebSocket URL for the chat gateway, derived from the REST origin.
+// The `uid` param lets the gateway pin this socket to a fixed chat replica
+// (session affinity via `hash $arg_uid` in nginx). It is a routing hint only and
+// is never trusted for authorization — the chat service authenticates via `token`.
 export function wsUrl(token: string, lastSeenId = 0): string {
   const base = API_URL.replace(/^http/, "ws")
-  return `${base}/ws?token=${encodeURIComponent(token)}&last_seen_id=${lastSeenId}`
+  const uid = getCurrentUser()?.id ?? ""
+  return `${base}/ws?token=${encodeURIComponent(token)}&last_seen_id=${lastSeenId}&uid=${uid}`
 }

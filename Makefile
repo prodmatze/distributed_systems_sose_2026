@@ -15,14 +15,19 @@ help: ## Show this help
 
 dev: backend frontend ## Start backend (detached) + frontend (foreground)
 
+# The gateway pins users to chat replicas by container name (chorus-chat-1..3
+# in infra/nginx/nginx.conf) and refuses to start if any of them is missing,
+# so the chat tier must always come up with exactly CHAT_REPLICAS instances.
+CHAT_REPLICAS := 3
+
 backend: ## Build & start the backend stack in the background
-	$(COMPOSE) up -d --build
+	$(COMPOSE) up -d --build --scale chat=$(CHAT_REPLICAS)
 
 frontend: ## Start the Next.js dev server (foreground, :3000)
 	cd $(FRONTEND) && pnpm dev
 
 up: ## Start the backend stack in the foreground (live logs, Ctrl-C to stop)
-	$(COMPOSE) up --build
+	$(COMPOSE) up --build --scale chat=$(CHAT_REPLICAS)
 
 down: ## Stop and remove backend containers
 	$(COMPOSE) down
