@@ -9,7 +9,6 @@ docs/observability/**) are not listed.
 | `infra/nginx/nginx.conf` | Added `log_format obs_json` + `access_log /dev/stdout obs_json` in `http{}`; added `proxy_set_header X-Request-ID $request_id;` to /auth/, /api/, /ws locations | Low — different region from PR #37's `chat_upstream` block |
 | `infra/compose/docker-compose.yml` | `command:` flags on postgres (pg_stat_statements preload) and redis (keyspace notifications) — inert for the app; `deploy.replicas: 3` added to the `chat:` service; three new profile-gated services (socket-proxy, observer, jaeger) appended | Low — additive; existing service blocks otherwise untouched |
 | `Makefile` | Appended obs-up/obs-down/obs-logs/obs-smoke targets + .PHONY additions | Low — appended after existing targets |
-| `.gitignore` | Added `.venv/` (if it was missing) | None |
 
 ## Additional notes from the live integration pass (Task 9)
 

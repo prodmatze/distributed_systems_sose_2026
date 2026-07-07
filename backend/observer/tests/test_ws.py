@@ -13,7 +13,7 @@ async def _idle(*args, **kwargs):
 
 def _mute_producers(monkeypatch):
     # WS tests exercise the hub/WS contract; producers are covered by their own tests.
-    for name in ("run_redis_tap", "run_docker_events", "run_docker_poll", "run_redis_stats"):
+    for name in ("run_redis_tap", "run_docker_events", "run_docker_poll", "run_redis_stats", "run_nginx_log"):
         monkeypatch.setattr(main_mod, name, _idle)
 
 

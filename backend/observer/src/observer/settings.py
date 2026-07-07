@@ -1,8 +1,8 @@
 """Observer-local settings. Env-prefixed OBS_ so they can never collide with
 the core services' env. The observer deliberately has its own settings class
 instead of importing shared.settings: it must be bootable with zero knowledge
-of JWT secrets or the app's ORM, and it dies loudly if its own few knobs are
-missing."""
+of JWT secrets or the app's ORM. Every field has a default; empty database_url
+silently disables the pg_stats producer instead of crashing."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

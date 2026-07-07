@@ -56,6 +56,11 @@ make obs-smoke   # live WS smoke test — asserts snapshot + required event type
 make obs-down    # stop everything, including the observability services
 ```
 
+Before running `make obs-smoke`, ensure the dev venv exists:
+```bash
+builtin cd backend/observer && python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+```
+
 `docker-compose.yml` carries `deploy.replicas: 3` on the `chat:` service, so
 a plain `docker compose -f infra/compose/docker-compose.yml --env-file infra/compose/.env up`
 (no `--scale`, no `--profile`) is now also safe — the gateway's named
@@ -79,8 +84,8 @@ Every producer emits the same shape (`observer/bus.py::Envelope`):
 ```jsonc
 {
   "id": "1720374000123-0",        // Redis stream ID = monotonic cursor (resume)
-  "type": "http.request | chat.message | docker.event | docker.stats |
-           presence.online | presence.offline | db.stats | redis.stats |
+  "type": "http.request | chat.message | chat.message.summary | docker.event | docker.stats |
+           docker.containers | presence.online | presence.offline | db.stats | redis.stats |
            observer.health | span | ...",
   "service": "api | auth | chat | gateway | postgres | redis | docker | observer",
   "ts": "2026-07-07T18:30:00.123Z",
@@ -120,9 +125,10 @@ one `{"type": "batch", "events": [...], "elided": 0}` frame — either the last
 `resume_from` set, everything since that exact ID via `XREAD`; (3) live tail
 in the same batch shape, one frame per ~150 ms coalesce window, forever.
 
-`resume_from` is the last `id` a client saw; passing it back on reconnect
-resumes with no gap and no re-delivery — deliberately the same shape as
-chat's own `last_seen_id` reconnect protocol (`docs/ARCHITECTURE.md` §4.3).
+`resume_from` is the last `id` a client saw; passing it back on reconnect delivers everything since that ID.
+**Important:** events between WS registration and the replay fetch can be delivered twice; consumers **MUST** dedupe by envelope `id`.
+A single resume read covers at most 500 missed events (max ~2000 by stream retention); longer disconnects mean a gap — reconnect without `resume_from` for a full snapshot+history instead.
+Deliberately the same shape as chat's own `last_seen_id` reconnect protocol (`docs/ARCHITECTURE.md` §4.3).
 
 Backpressure is per-client: a bounded queue drops the *oldest* event when a
 slow consumer falls behind (never blocks the bus or other clients), and the
@@ -176,6 +182,8 @@ be:
   `{postgres, redis, socket-proxy, observer}` that stays untouchable.)
 - **No auth in MVP, by design.** The control plane inherits the trust of the
   machine it binds to; it is never deployed past a developer's laptop.
+- **Chat visibility.** The observer's `chan:*` subscription tap sees full chat message bodies on the bus.
+  This is acceptable for this dev-only, localhost-bound tool and is a deliberate, documented trade-off.
 
 ## Failure isolation contract
 
