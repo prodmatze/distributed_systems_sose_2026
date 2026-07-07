@@ -18,6 +18,7 @@ from redis.asyncio import Redis
 from observer.bus import Bus
 from observer.hub import Hub
 from observer.producers.docker_ import run_docker_events, run_docker_poll
+from observer.producers.nginx_log import run_nginx_log
 from observer.producers.pg_stats import run_pg_stats
 from observer.producers.redis_stats import run_redis_stats
 from observer.producers.redis_tap import run_redis_tap
@@ -66,6 +67,9 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(
             supervise("pg_stats", lambda: run_pg_stats(bus), bus),
             name="producer-pg-stats"))
+    tasks.append(asyncio.create_task(
+        supervise("nginx_log", lambda: run_nginx_log(bus), bus),
+        name="producer-nginx-log"))
     try:
         yield
     finally:
