@@ -52,16 +52,19 @@ class WorldState:
     # ── folding handlers ────────────────────────────────────────────────
 
     def _on_docker_containers(self, p: dict) -> None:
-        self._containers = {
-            c["name"]: {
+        containers = {}
+        for c in p.get("containers", []):
+            name = c.get("name")
+            if not name:
+                continue
+            containers[name] = {
                 "service": c.get("service"),
                 "state": c.get("state"),
                 "health": c.get("health"),
                 "status": c.get("status"),
-                "stats": self._containers.get(c["name"], {}).get("stats", {}),
+                "stats": self._containers.get(name, {}).get("stats", {}),
             }
-            for c in p.get("containers", [])
-        }
+        self._containers = containers
 
     def _on_docker_event(self, p: dict) -> None:
         name, action = p.get("container"), p.get("action", "")
@@ -104,12 +107,15 @@ class WorldState:
         except (ValueError, TypeError):
             return
         self._newest_ts = max(self._newest_ts, t)
-        q = self._times[env.type]
-        q.append(t)
         cutoff = self._newest_ts - _WINDOW_S
-        for q_ in self._times.values():
-            while q_ and q_[0] < cutoff:
-                q_.popleft()
+        q = self._times[env.type]
+        if t >= cutoff:
+            q.append(t)
+        # Envelopes can arrive out of order (multiple producers, clock skew), so the
+        # deque isn't guaranteed sorted; rebuild instead of popping from the head only.
+        # Window sizes are small (rate-limited producers), so O(n) per bump is fine.
+        for k, q_ in self._times.items():
+            self._times[k] = deque(x for x in q_ if x >= cutoff)
 
     def _rates(self) -> dict[str, float]:
         return {k: len(q) / _WINDOW_S for k, q in self._times.items() if q}
