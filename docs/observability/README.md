@@ -269,7 +269,5 @@ recreation. Named volumes persist, `migrate` re-runs idempotently; a brief
 
 ## Links
 
-- Design spec: [`docs/superpowers/specs/2026-07-07-observability-layer-design.md`](../superpowers/specs/2026-07-07-observability-layer-design.md)
 - Merge notes (every pre-existing file touched, with rationale): [`docs/observability/MERGE-NOTES.md`](./MERGE-NOTES.md)
-- Frontend design brief (Plan B input): [`docs/observability/DESIGN-BRIEF.md`](./DESIGN-BRIEF.md)
-- Session plan / changelog: [`docs/sessions/2026-07-07-observability-layer/`](../sessions/2026-07-07-observability-layer/)
+- System design and data flows: [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)

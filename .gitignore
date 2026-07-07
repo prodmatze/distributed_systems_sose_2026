@@ -28,3 +28,8 @@ __pycache__/
 # agents, claude-stuff, etc.
 .claude/
 .agents/
+
+# local working notes, not part of the repo
+docs/sessions/
+docs/superpowers/
+docs/observability/DESIGN-BRIEF.md
