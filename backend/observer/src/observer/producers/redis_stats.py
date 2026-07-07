@@ -9,8 +9,6 @@ is useless here: it excludes pattern subscribers, and this app has only those.)
 import asyncio
 import logging
 
-from redis.exceptions import ResponseError
-
 from observer.bus import Bus
 
 logger = logging.getLogger("observer.producers.redis_stats")
@@ -38,18 +36,15 @@ async def run_redis_stats(redis_factory, bus: Bus) -> None:
     redis = redis_factory()
     try:
         while True:
-            try:
-                info = await redis.info()
-                clients = await redis.client_list()
-                numpat = await redis.pubsub_numpat()
-                presence: list[tuple[str, int]] = []
-                async for key in redis.scan_iter(match="presence:*", count=100):
-                    ttl = await redis.ttl(key)
-                    presence.append((key.removeprefix("presence:"), ttl))
-                await bus.emit(type="redis.stats", service="redis",
-                               payload=build_payload(info, clients, numpat, presence))
-            except ResponseError as exc:
-                logger.debug("redis command unsupported (likely FakeRedis): %s", exc)
+            info = await redis.info()
+            clients = await redis.client_list()
+            numpat = await redis.pubsub_numpat()
+            presence: list[tuple[str, int]] = []
+            async for key in redis.scan_iter(match="presence:*", count=100):
+                ttl = await redis.ttl(key)
+                presence.append((key.removeprefix("presence:"), ttl))
+            await bus.emit(type="redis.stats", service="redis",
+                           payload=build_payload(info, clients, numpat, presence))
             await asyncio.sleep(_INTERVAL_S)
     finally:
         await redis.aclose()

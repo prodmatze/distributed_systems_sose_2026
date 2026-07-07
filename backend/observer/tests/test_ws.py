@@ -1,3 +1,5 @@
+import asyncio
+
 import fakeredis.aioredis
 from fastapi.testclient import TestClient
 
@@ -5,10 +7,21 @@ import observer.main as main_mod
 from observer.main import app
 
 
+async def _idle(*args, **kwargs):
+    await asyncio.sleep(3600)
+
+
+def _mute_producers(monkeypatch):
+    # WS tests exercise the hub/WS contract; producers are covered by their own tests.
+    for name in ("run_redis_tap", "run_docker_events", "run_docker_poll", "run_redis_stats"):
+        monkeypatch.setattr(main_mod, name, _idle)
+
+
 def test_ws_sends_snapshot_then_history(monkeypatch):
     # Route the whole app lifespan at one shared fake redis.
     fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(main_mod, "_make_redis", lambda: fake)
+    _mute_producers(monkeypatch)
 
     with TestClient(app) as client:
         # Seed one event through the app's own bus, on the app's event loop.
@@ -33,6 +46,7 @@ def test_ws_resume_from_replays_only_missed_events(monkeypatch):
     # Route the whole app lifespan at one shared fake redis.
     fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(main_mod, "_make_redis", lambda: fake)
+    _mute_producers(monkeypatch)
 
     with TestClient(app) as client:
         # Seed two events through the app's own bus, on the app's event loop.
