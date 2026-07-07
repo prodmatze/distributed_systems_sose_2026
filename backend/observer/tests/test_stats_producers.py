@@ -5,11 +5,16 @@ from observer.producers.redis_stats import build_payload as redis_payload
 def test_redis_payload_shape():
     info = {"instantaneous_ops_per_sec": 12, "connected_clients": 9,
             "used_memory_human": "1.1M", "total_commands_processed": 5000}
-    clients = [{"name": "chat", "addr": "10.0.0.5:5566", "cmd": "psubscribe"},
-               {"name": "", "addr": "10.0.0.9:1234", "cmd": "client|list"}]
+    clients = [
+        {"name": "chat", "addr": "10.0.0.5:5566", "cmd": "psubscribe", "psub": "1"},
+        {"name": "chat", "addr": "10.0.0.6:5567", "cmd": "psubscribe", "psub": "1"},
+        {"name": "observer", "addr": "10.0.0.9:1234", "cmd": "psubscribe", "psub": "2"},
+        {"name": "api", "addr": "10.0.0.7:1235", "cmd": "client|list", "psub": "0"},
+    ]
     out = redis_payload(info, clients, numpat=3, presence=[("7", 22), ("9", 30)])
     assert out["ops_per_sec"] == 12
     assert out["numpat"] == 3
+    assert out["chat_subscribers"] == 2
     assert out["clients"][0]["name"] == "chat"
     assert out["presence"] == [{"user_id": 7, "ttl": 22}, {"user_id": 9, "ttl": 30}]
 

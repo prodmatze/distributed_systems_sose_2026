@@ -53,7 +53,14 @@ def test_presence_online_offline():
 
 def test_replicas_from_redis_stats():
     ws = WorldState()
-    ws.apply(_env("redis.stats", {"numpat": 3}))
+    ws.apply(_env("redis.stats", {"chat_subscribers": 3, "numpat": 2}))
+    assert ws.snapshot()["replicas"] == 3
+
+
+def test_replicas_unchanged_when_chat_subscribers_missing():
+    ws = WorldState()
+    ws.apply(_env("redis.stats", {"chat_subscribers": 3, "numpat": 2}))
+    ws.apply(_env("redis.stats", {"numpat": 2}, id="2-0"))
     assert ws.snapshot()["replicas"] == 3
 
 

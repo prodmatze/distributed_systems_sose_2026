@@ -96,7 +96,11 @@ class WorldState:
         self._online.discard(p.get("user_id"))
 
     def _on_redis_stats(self, p: dict) -> None:
-        if (n := p.get("numpat")) is not None:
+        # chat_subscribers (CLIENT LIST psub count), not numpat — NUMPAT counts
+        # distinct pattern *strings*, not subscribing clients, so it's flat at 2
+        # regardless of replica count (live-discovered 2026-07-07, Task 9). See
+        # observer.producers.redis_stats module docstring for the full story.
+        if (n := p.get("chat_subscribers")) is not None:
             self._replicas = n
 
     # ── rates ───────────────────────────────────────────────────────────

@@ -51,6 +51,30 @@ docs/observability/**) are not listed.
   replicas are confirmed up, `docker restart chorus-gateway-1` to force an
   immediate retry instead of waiting out the backoff.
 
+- **General rule: nginx caches upstream DNS at startup, so ANY backend
+  container recreation can leave a *still-running* gateway stale — not just
+  the two cases above.** Live-discovered in Task 9: running `make obs-up`
+  routinely recreates api/auth/chat containers (fresh container IDs, fresh
+  IPs) while the gateway container itself keeps running unchanged. nginx
+  resolved the upstream hostnames once at its own startup and cached the old
+  IPs, so it silently keeps sending traffic to addresses that no longer
+  answer — no crash, no restart loop, no config edit, just quiet 404/502s
+  that look like an application bug. The fix is the same
+  `--force-recreate --no-deps gateway` as the nginx.conf case, or a plain
+  `docker restart chorus-gateway-1` when only the upstream IPs moved (no
+  config content changed). **Rule of thumb: after recreating *any* backend
+  container (api, auth, chat, or a fresh `make obs-up`), always recreate or
+  restart the gateway too — don't assume "the gateway didn't change" means
+  "the gateway is fine."**
+
+  Symptom table — three distinct triggers, same-looking gateway misbehavior:
+
+  | Trigger | Root cause | Fix |
+  |---|---|---|
+  | `nginx.conf` edited on host | Bind-mounted single file; edit changes the inode, running container keeps the old unlinked file open | `restart`/`reload` insufficient — must `up -d --force-recreate --no-deps gateway` |
+  | Backend container recreated (api/auth/chat, e.g. via `make obs-up`) | Gateway resolved upstream DNS once at its own startup; recreated backends get new IPs the running gateway never re-resolves | `--force-recreate --no-deps gateway`, or `docker restart chorus-gateway-1` if only IPs changed |
+  | Gateway itself recreated before all 3 `chorus-chat-*` upstreams exist | nginx fails its own start, lands in Docker's restart backoff window | `docker restart chorus-gateway-1` once chat replicas are confirmed up, to force an immediate retry |
+
 - **postgres/redis are recreated by the `command:` change, not just
   restarted.** Compose treats a changed `command:` as a config diff, so
   `make obs-up` (and any subsequent `up`) recreates both containers. Named
