@@ -10,13 +10,15 @@ Run:  make obs-smoke        (stack must already be up)
 
 import asyncio
 import json
+import os
 import sys
 import urllib.request
 
 from websockets.asyncio.client import connect  # provided by uvicorn[standard]'s websockets
 
-WS = "ws://127.0.0.1:8090/observer/ws"
-GATEWAY = "http://localhost:8080/api/health"
+# Ports follow the Makefile's ALTPORTS override (exported into the environment).
+WS = f"ws://127.0.0.1:{os.environ.get('OBSERVER_PORT', '8090')}/observer/ws"
+GATEWAY = f"http://localhost:{os.environ.get('GATEWAY_PORT', '8080')}/api/health"
 
 
 async def main() -> int:

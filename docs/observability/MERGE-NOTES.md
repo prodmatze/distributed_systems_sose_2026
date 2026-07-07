@@ -6,9 +6,10 @@ docs/observability/**) are not listed.
 
 | File | Change | Conflict risk |
 |---|---|---|
-| `infra/nginx/nginx.conf` | Added `log_format obs_json` + `access_log /dev/stdout obs_json` in `http{}`; added `proxy_set_header X-Request-ID $request_id;` to /auth/, /api/, /ws locations | Low — different region from PR #37's `chat_upstream` block |
-| `infra/compose/docker-compose.yml` | `command:` flags on postgres (pg_stat_statements preload) and redis (keyspace notifications) — inert for the app; `deploy.replicas: 3` added to the `chat:` service; three new profile-gated services (socket-proxy, observer, jaeger) appended | Low — additive; existing service blocks otherwise untouched |
-| `Makefile` | Appended obs-up/obs-down/obs-logs/obs-smoke targets + .PHONY additions | Low — appended after existing targets |
+| `infra/nginx/nginx.conf` | Added `log_format obs_json` + `access_log /dev/stdout obs_json` in `http{}`; added `proxy_set_header X-Request-ID $request_id;` to /auth/, /api/, /ws locations; added `http://localhost:3001` to the `$cors_origin` map (frontend can run on 3001 in local dev) | Low — different region from PR #37's `chat_upstream` block |
+| `infra/compose/docker-compose.yml` | `command:` flags on postgres (pg_stat_statements preload) and redis (keyspace notifications) — inert for the app; `deploy.replicas: 3` added to the `chat:` service; every published host port parameterized as `${VAR:-default}` (POSTGRES_PORT/REDIS_PORT/GATEWAY_PORT/OBSERVER_PORT/JAEGER_PORT — defaults unchanged); three new profile-gated services (socket-proxy, observer, jaeger) appended | Low — additive; existing service blocks otherwise untouched |
+| `Makefile` | Appended obs-up/obs-down/obs-logs/obs-smoke + `ports` targets + .PHONY; added the `ALTPORTS` host-port override block (exports the port vars, points frontend + health at the chosen gateway port) | Low — additive |
+| `backend/observer/scripts/obs_smoke.py` | Reads `OBSERVER_PORT`/`GATEWAY_PORT` from env (defaults 8090/8080) so `make obs-smoke` follows `ALTPORTS` | None — observer-local script |
 
 ## Additional notes from the live integration pass (Task 9)
 
@@ -86,6 +87,19 @@ docs/observability/**) are not listed.
   exact versions chosen and why (`tecnativa/docker-socket-proxy` has no bare
   `0.4` tag on Docker Hub; `cr.jaegertracing.io/jaegertracing/jaeger:2.19.0`
   pulled as specified).
+
+- **Local-dev host-port override (`ALTPORTS`).** Every host-published port is
+  now `${VAR:-default}` in compose (defaults identical to before), and the
+  Makefile adds a single flag: `make obs-up ALTPORTS=1` shifts gateway→18080,
+  postgres→15432, redis→16379, observer→18090, jaeger→18686 so the conventional
+  ports stay free for another app on the same machine. Only the HOST side of
+  each mapping moves — container-internal wiring (service DNS, `gateway:80`,
+  `postgres:5432`) is unchanged, so nothing inside the stack reconfigures. The
+  Makefile also points the frontend (`NEXT_PUBLIC_API_URL`) and `make health` /
+  `make obs-smoke` at the chosen gateway/observer port automatically. `make
+  ports` (add `ALTPORTS=1`) previews the mapping. Note: switching between
+  default and alt ports recreates the affected containers (new host binding) —
+  volumes persist, so no data loss.
 
 Planned for Plan C (not yet applied): `backend/shared/pyproject.toml` (+OTel deps),
 new `shared/telemetry.py`, 2-line init in each service main.py, ~4 call-site
