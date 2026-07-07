@@ -84,7 +84,7 @@ def compute_cpu_pct(cur: dict, prev: dict | None) -> float:
 
 
 def _summarize_stats(cur: dict, prev: dict | None) -> dict:
-    mem = cur.get("memory_stats", {})
+    mem = cur.get("memory_stats") or {}
     usage = mem.get("usage", 0) or 0
     limit = mem.get("limit", 0) or 0
     nets = cur.get("networks") or {}
@@ -149,6 +149,9 @@ async def run_docker_poll(bus: Bus) -> None:
                     continue
                 stats[name] = _summarize_stats(sample, prev_samples.get(name))
                 prev_samples[name] = sample
+            # Prune stale entries: container names churn on recreation, so unbounded cache growth
+            current_names = {(c._container.get("Names") or ["/?"])[0].lstrip("/") for c in containers}
+            prev_samples = {n: s for n, s in prev_samples.items() if n in current_names}
             if stats:
                 await bus.emit(type="docker.stats", service="docker",
                                payload={"stats": stats})
