@@ -6,6 +6,7 @@ docs/observability/**) are not listed.
 
 | File | Change | Conflict risk |
 |---|---|---|
+| `frontend/package.json`, `frontend/pnpm-lock.yaml` | Dashboard deps (xyflow, zustand, virtuoso, simple-icons) and a vitest devDependency block | Low — additive |
 | `infra/nginx/nginx.conf` | Added `log_format obs_json` + `access_log /dev/stdout obs_json` in `http{}`; added `proxy_set_header X-Request-ID $request_id;` to /auth/, /api/, /ws locations; added `http://localhost:3001` to the `$cors_origin` map (frontend can run on 3001 in local dev) | Low — different region from PR #37's `chat_upstream` block |
 | `infra/compose/docker-compose.yml` | `command:` flags on postgres (pg_stat_statements preload) and redis (keyspace notifications) — inert for the app; `deploy.replicas: 3` added to the `chat:` service; every published host port parameterized as `${VAR:-default}` (POSTGRES_PORT/REDIS_PORT/GATEWAY_PORT/OBSERVER_PORT/JAEGER_PORT — defaults unchanged); three new profile-gated services (socket-proxy, observer, jaeger) appended | Low — additive; existing service blocks otherwise untouched |
 | `Makefile` | Appended obs-up/obs-down/obs-logs/obs-smoke + `ports` targets + .PHONY; added the `ALTPORTS` host-port override block (exports the port vars, points frontend + health at the chosen gateway port) | Low — additive |
