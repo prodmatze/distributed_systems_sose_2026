@@ -59,6 +59,49 @@ describe("mock stream", () => {
     expect(actions.indexOf("die")).toBeLessThan(actions.lastIndexOf("start"))
   })
 
+  test("payload shapes match the observer protocol", () => {
+    // 21s so the scripted die event (phase 20) is in the collection too
+    const events = collect(21_000).flatMap((f) => (f.type === "batch" ? f.events : []))
+    const first = (t: string) => {
+      const e = events.find((e) => e.type === t)
+      if (!e) throw new Error(`no ${t} event generated`)
+      return e
+    }
+
+    const http = first("http.request")
+    expect(Object.keys(http.payload).sort()).toEqual(["method", "remote", "rt_ms", "status", "upstream", "uri"])
+    expect(typeof http.corr).toBe("string")
+
+    const chat = first("chat.message")
+    expect(typeof chat.payload.channel_id).toBe("number")
+    const msg = chat.payload.message as Record<string, unknown>
+    expect(Object.keys(msg).sort()).toEqual(["body", "channel_id", "created_at", "id", "sender_id", "sender_username", "type"])
+
+    const summary = first("chat.message.summary")
+    expect(typeof summary.payload.count).toBe("number")
+
+    const stats = (first("docker.stats").payload.stats as Record<string, Record<string, unknown>>)["chorus-chat-1"]
+    expect(Object.keys(stats).sort()).toEqual(["cpu_pct", "mem_mb", "mem_pct", "rx_kb", "tx_kb"])
+
+    const dockerEvent = first("docker.event")
+    expect(typeof dockerEvent.payload.action).toBe("string")
+    expect(typeof dockerEvent.payload.container).toBe("string")
+    expect(typeof dockerEvent.payload.service).toBe("string")
+
+    // first redis.stats is from history — steady traffic, all 3 replicas alive
+    const redis = first("redis.stats").payload
+    expect(redis.chat_subscribers).toBe(3)
+    expect(redis.numpat).not.toBe(redis.chat_subscribers)
+    expect(Array.isArray(redis.presence)).toBe(true)
+    expect(Array.isArray(redis.clients)).toBe(true)
+
+    const db = first("db.stats").payload
+    expect(typeof db.commits_per_s).toBe("number")
+    expect(typeof db.cache_hit_pct).toBe("number")
+    expect(Array.isArray(db.queries)).toBe(true)
+    expect(Array.isArray(db.connections)).toBe(true)
+  })
+
   test("burst window exceeds 50 events/s", () => {
     const events = collect(48_000).flatMap((f) => (f.type === "batch" ? f.events : []))
     const perSecond = new Map<number, number>()
