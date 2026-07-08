@@ -1,0 +1,247 @@
+/* mission control — scoped tokens + utilities. Token values are the
+   design tokens adopted for the dashboard; see docs/observability/README.md. */
+
+.obs {
+  /* Background elevations (3 levels + canvas) */
+  --bg-0: #0a0e14;            /* page canvas */
+  --bg-1: #0e141d;            /* panel */
+  --bg-2: #131b27;            /* elevated card / popover */
+  --bg-3: #1a2433;            /* hover / active fill */
+
+  /* Borders — thin, desaturated */
+  --border-1: #1b2534;        /* hairline, default */
+  --border-2: #29374b;        /* emphasized / interactive */
+
+  /* Text — 3 levels */
+  --text-1: #e8eef5;          /* primary */
+  --text-2: #8fa3b8;          /* secondary */
+  --text-3: #55667c;          /* tertiary / disabled */
+
+  /* Accent — cyan/teal */
+  --accent: #3fd6ec;
+  --accent-strong: #6ee7f7;   /* hover / highlight */
+  --accent-dim: rgba(63, 214, 236, 0.12);   /* fills, selected states */
+  --accent-border: rgba(63, 214, 236, 0.35);
+  --on-accent: #06222a;       /* text on solid accent */
+
+  /* Status */
+  --status-ok: #34d399;       /* emerald — healthy */
+  --status-warn: #f5b83d;     /* amber — warn / SQL */
+  --status-crit: #ff5c5c;     /* red — critical / kill */
+  --status-idle: #55667c;     /* gray — stopped / unknown */
+  --status-ok-dim: rgba(52, 211, 153, 0.12);
+  --status-warn-dim: rgba(245, 184, 61, 0.12);
+  --status-crit-dim: rgba(255, 92, 92, 0.12);
+  --status-idle-dim: rgba(85, 102, 124, 0.16);
+
+  /* Event / traffic types */
+  --evt-http: #5ea2ff;        /* blue — HTTP */
+  --evt-ws: #4ade80;          /* green — WebSocket */
+  --evt-sql: #f5b83d;         /* amber — SQL (== warn) */
+  --evt-trace: #a78bfa;       /* violet — traces */
+  --evt-redis: #ff7a90;       /* rose — pub/sub */
+
+  /* Per-service badge hues (consistent everywhere) */
+  --svc-browser: #8fa3b8;
+  --svc-gateway: #3fd6ec;
+  --svc-auth: #a78bfa;
+  --svc-api: #5ea2ff;
+  --svc-chat: #4ade80;
+  --svc-redis: #ff7a90;
+  --svc-postgres: #f5b83d;
+  --svc-docker: #7d95f5;
+  --svc-observer: #9aa8b6;
+
+  /* Semantic aliases */
+  --surface-page: var(--bg-0);
+  --surface-panel: var(--bg-1);
+  --surface-card: var(--bg-2);
+  --surface-hover: var(--bg-3);
+  --text-body: var(--text-1);
+  --text-muted: var(--text-2);
+  --text-faint: var(--text-3);
+  --link: var(--accent);
+  --link-hover: var(--accent-strong);
+
+  /* Shadows (dark surfaces barely need them — elevation is bg + border) */
+  --shadow-panel: 0 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.35);
+
+  /* Glow recipes — active/live elements only */
+  --glow-accent: 0 0 0 1px var(--accent-border), 0 0 14px rgba(63, 214, 236, 0.25);
+  --glow-ok: 0 0 0 1px rgba(52, 211, 153, 0.35), 0 0 12px rgba(52, 211, 153, 0.22);
+  --glow-crit: 0 0 0 1px rgba(255, 92, 92, 0.40), 0 0 14px rgba(255, 92, 92, 0.28);
+
+  /* Focus ring */
+  --ring: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent-border);
+
+  /* Motion — purposeful only; respect prefers-reduced-motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
+  --dur-fast: 120ms;  /* hover, press */
+  --dur-med: 200ms;   /* drawers, tabs */
+  --dur-slow: 320ms;  /* panel entrances */
+
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+
+  /* Size scale (px — dashboard density; 12px is the floor) */
+  --text-2xs: 11px;   /* micro-labels ONLY (uppercase + tracking) */
+  --text-xs: 12px;    /* dense table rows, timestamps */
+  --text-sm: 13px;    /* default dashboard body */
+  --text-md: 14px;    /* app body */
+  --text-lg: 16px;    /* panel titles */
+  --text-xl: 20px;    /* page titles */
+  --text-2xl: 28px;   /* stat numbers, screen headers */
+  --text-3xl: 40px;   /* hero / big callouts (e.g. REPLICAS ×3) */
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  /* Uppercase micro-label recipe: 11px / 600 / tracking / text-2 */
+  --tracking-micro: 0.08em;
+  --tracking-display: -0.02em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 48px;
+
+  --radius-xs: 3px;    /* chips, badges */
+  --radius-sm: 4px;    /* buttons, inputs (mission control) */
+  --radius-md: 6px;    /* panels, cards (mission control max) */
+  --radius-lg: 10px;   /* chat-app cards/buttons (repo --radius) */
+  --radius-xl: 14px;   /* chat-app dialogs */
+  --radius-full: 9999px;
+
+  /* Fixed chrome */
+  --header-h: 44px;    /* mission-control header bar */
+  --app-header-h: 56px;/* chat-app headers (h-14 in repo) */
+  --sidebar-w: 256px;  /* chat-app sidebar (w-64 in repo) */
+
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --font-display: var(--font-space-grotesk), var(--font-sans), sans-serif;
+
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  min-height: 100dvh;
+}
+
+/* Light mode — token-driven; dark stays the hero */
+.obs.light {
+  --bg-0: #f5f7fa;
+  --bg-1: #ffffff;
+  --bg-2: #ffffff;
+  --bg-3: #eef2f7;
+  --border-1: #e2e8f0;
+  --border-2: #c6d2e0;
+  --text-1: #131b27;
+  --text-2: #4d5d70;
+  --text-3: #8a99ab;
+  --accent: #0891b2;
+  --accent-strong: #0e7490;
+  --accent-dim: rgba(8, 145, 178, 0.10);
+  --accent-border: rgba(8, 145, 178, 0.35);
+  --on-accent: #ffffff;
+  --status-ok: #059669;
+  --status-warn: #b45309;
+  --status-crit: #dc2626;
+  --status-idle: #8a99ab;
+  --status-ok-dim: rgba(5, 150, 105, 0.10);
+  --status-warn-dim: rgba(180, 83, 9, 0.10);
+  --status-crit-dim: rgba(220, 38, 38, 0.10);
+  --status-idle-dim: rgba(138, 153, 171, 0.14);
+  --evt-http: #2563eb;
+  --evt-ws: #16a34a;
+  --evt-sql: #b45309;
+  --evt-trace: #7c3aed;
+  --evt-redis: #e11d61;
+  --svc-browser: #64748b;
+  --svc-gateway: #0891b2;
+  --svc-auth: #7c3aed;
+  --svc-api: #2563eb;
+  --svc-chat: #16a34a;
+  --svc-redis: #e11d61;
+  --svc-postgres: #b45309;
+  --svc-docker: #4f63d2;
+  --svc-observer: #64748b;
+
+  --shadow-panel: 0 1px 2px rgba(19, 27, 39, 0.06);
+  --shadow-pop: 0 8px 24px rgba(19, 27, 39, 0.12), 0 2px 8px rgba(19, 27, 39, 0.08);
+  --ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--accent-border);
+}
+
+.obs-panel {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.obs-panel-title {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.obs-micro {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.obs-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.obs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.obs ::-webkit-scrollbar { width: 8px; height: 8px; }
+.obs ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+.obs ::-webkit-scrollbar-track { background: transparent; }
+.obs { scrollbar-color: var(--border-2) transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .obs .obs-pulse,
+  .obs .obs-edge-dot,
+  .obs canvas.obs-comet { display: none !important; }
+  .obs .obs-edge-flow { animation: none !important; }
+}
