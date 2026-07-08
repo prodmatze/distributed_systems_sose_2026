@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation"
 
 import { ConnectionPill } from "@/components/observability/connection-pill"
+import { StatStrip } from "@/components/observability/stat-strip"
 import { TabBar } from "@/components/observability/tab-bar"
 import { useObservabilityStream } from "@/lib/observability/stream"
 
@@ -20,7 +21,9 @@ export default function ObservabilityPage() {
           <ConnectionPill />
         </div>
       </header>
-      <section id="obs-statstrip" aria-label="key rates" style={{ flexShrink: 0 }} />
+      <section id="obs-statstrip" aria-label="key rates" style={{ flexShrink: 0 }}>
+        <StatStrip />
+      </section>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(360px, 1fr)", gap: "var(--space-3)", flex: 1, minHeight: 0 }}>
         <section id="obs-topology" aria-label="system topology" className="obs-panel" />
         <section id="obs-firehose" aria-label="event feed" className="obs-panel" />
