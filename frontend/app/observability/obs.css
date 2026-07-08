@@ -239,6 +239,250 @@
 .obs ::-webkit-scrollbar-track { background: transparent; }
 .obs { scrollbar-color: var(--border-2) transparent; }
 
+/* ── Topology canvas ─────────────────────────────────────────────────── */
+
+.obs-topo-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.obs-topo-canvas .react-flow { background: transparent; }
+.obs-topo-canvas .react-flow__attribution {
+  background: transparent;
+  color: var(--text-3);
+  font-size: 9px;
+}
+.obs-topo-canvas .react-flow__attribution a { color: var(--text-3); }
+.obs-topo-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.obs-topo-canvas .react-flow__controls-button {
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border-1);
+  fill: var(--text-2);
+}
+.obs-topo-canvas .react-flow__controls-button:hover { background: var(--bg-3); }
+
+/* Edge classes — out-specify xyflow's own .react-flow__edge-path rule. */
+.obs .react-flow__edge-path.obs-edge { stroke: var(--border-2); stroke-width: 1; }
+.obs .react-flow__edge-path.obs-edge-flow {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  animation: obs-flow 0.6s linear infinite;
+}
+@keyframes obs-flow { to { stroke-dashoffset: -10; } }
+
+/* Node card */
+.obs-node {
+  position: relative;
+  box-sizing: border-box;
+  width: 132px;
+  padding: var(--space-3);
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-med) var(--ease-out);
+}
+.obs-node:hover { border-color: var(--accent-border); }
+
+/* Continuous glow: shadow is pre-rendered, only opacity ever animates. */
+.obs-node::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--glow-accent);
+  opacity: var(--glow, 0);
+  transition: opacity var(--dur-med) var(--ease-out);
+  pointer-events: none;
+}
+
+.obs .obs-node-handle {
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Corner brackets — each span draws an L via its ::before/::after arms. */
+.obs-node-bracket {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+}
+.obs-node-bracket-tl { top: 3px; left: 3px; }
+.obs-node-bracket-br { bottom: 3px; right: 3px; }
+.obs-node-bracket::before,
+.obs-node-bracket::after {
+  content: "";
+  position: absolute;
+  background: var(--border-2);
+}
+.obs-node-bracket::before { width: 7px; height: 1px; }
+.obs-node-bracket::after { width: 1px; height: 7px; }
+.obs-node-bracket-tl::before { top: 0; left: 0; }
+.obs-node-bracket-tl::after { top: 0; left: 0; }
+.obs-node-bracket-br::before { right: 0; bottom: 0; }
+.obs-node-bracket-br::after { right: 0; bottom: 0; }
+
+.obs-node-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.obs-node-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.obs-node-ring { flex-shrink: 0; }
+.obs-node-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Pulse target — Task 10 drives this; inert now. */
+.obs-pulse {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Micro-bars */
+.obs-microbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+.obs-microbar-label {
+  font-size: 9px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-micro);
+  color: var(--text-3);
+}
+.obs-microbar-track {
+  height: 3px;
+  background: var(--bg-0);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.obs-microbar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width var(--dur-med) var(--ease-out);
+}
+.obs-microbar-val {
+  min-width: 26px;
+  font-size: 9px;
+  color: var(--text-2);
+  text-align: right;
+}
+
+/* Node detail drawer */
+.obs-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 280px;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--bg-1);
+  border-left: 1px solid var(--border-2);
+  box-shadow: var(--shadow-pop);
+  overflow-y: auto;
+}
+.obs-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.obs-drawer-name {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-1);
+  word-break: break-all;
+}
+.obs-drawer-close {
+  display: inline-flex;
+  padding: 2px;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+.obs-drawer-close:hover { color: var(--text-1); border-color: var(--border-2); }
+.obs-drawer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.obs-drawer-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.obs-drawer-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.obs-drawer-stats .obs-num {
+  font-size: var(--text-sm);
+  color: var(--text-1);
+}
+.obs-drawer-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.obs-drawer-events ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.obs-drawer-events li {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+}
+.obs-drawer-action { color: var(--text-1); }
+.obs-drawer-ts { color: var(--text-3); }
+.obs-drawer-empty { font-size: var(--text-xs); color: var(--text-3); }
+
 @media (prefers-reduced-motion: reduce) {
   .obs .obs-pulse,
   .obs .obs-edge-dot,

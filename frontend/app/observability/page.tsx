@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 
 import { ConnectionPill } from "@/components/observability/connection-pill"
@@ -7,6 +8,12 @@ import { Firehose } from "@/components/observability/firehose"
 import { StatStrip } from "@/components/observability/stat-strip"
 import { TabBar } from "@/components/observability/tab-bar"
 import { useObservabilityStream } from "@/lib/observability/stream"
+
+// Lazy, client-only — keeps xyflow (and the whole topology tree) out of the
+// chat app's bundle.
+const Topology = dynamic(() => import("@/components/observability/topology").then((m) => m.Topology), {
+  ssr: false,
+})
 
 export default function ObservabilityPage() {
   const mock = useSearchParams().get("mock") === "1"
@@ -26,7 +33,9 @@ export default function ObservabilityPage() {
         <StatStrip />
       </section>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(360px, 1fr)", gap: "var(--space-3)", flex: 1, minHeight: 0 }}>
-        <section id="obs-topology" aria-label="system topology" className="obs-panel" />
+        <section id="obs-topology" aria-label="system topology" className="obs-panel">
+          <Topology />
+        </section>
         <section id="obs-firehose" aria-label="event feed" className="obs-panel">
           <Firehose />
         </section>
