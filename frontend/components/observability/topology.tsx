@@ -36,6 +36,7 @@ import type { ContainerInfo } from "@/lib/observability/types"
 
 import { AnimatedSvgEdge, type ObsEdgeData } from "./animated-edge"
 import { NodeDrawer } from "./node-drawer"
+import { attachPulseRouter } from "./pulse-layer"
 import { TopologyNode, type ObsFlowNode } from "./topology-node"
 
 // Stable references — React Flow warns and thrashes if these are rebuilt.
@@ -97,6 +98,10 @@ function TopologyFlow() {
   const onNodeClick = useCallback<NodeMouseHandler<ObsFlowNode>>((_, node) => {
     setSelected(node.id as ObsNodeId)
   }, [])
+
+  // Router lives entirely outside React: subscribes to onFresh once, drives
+  // DOM pulses directly per batch, detaches on unmount.
+  useEffect(() => attachPulseRouter(), [])
 
   return (
     <div className="obs-topo-canvas">

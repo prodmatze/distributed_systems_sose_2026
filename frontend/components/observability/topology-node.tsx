@@ -11,6 +11,7 @@ import { Boxes, Globe, KeyRound, MessagesSquare } from "lucide-react"
 import { arcRing, type TopoNodeDatum } from "@/lib/observability/topology-model"
 
 import { MicroBar } from "./micro-bar"
+import { registerNodeEl } from "./pulse-layer"
 
 export type ObsFlowNode = Node<TopoNodeDatum, "obs">
 
@@ -69,6 +70,9 @@ export function TopologyNode({ id, data }: NodeProps<ObsFlowNode>) {
 
   return (
     <div
+      ref={(el) => {
+        registerNodeEl(id, el)
+      }}
       data-obs-node={id}
       className="obs-node"
       style={{ "--glow": String(glow), ...(cardBg ? { background: cardBg } : {}) } as React.CSSProperties}
