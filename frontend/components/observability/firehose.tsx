@@ -3,12 +3,18 @@
 import { useMemo, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
 
+import { foldForDisplay, type DisplayRow } from "@/lib/observability/fold-display"
 import { colorForKind, kindForType, type EvtKind } from "@/lib/observability/summarize"
 import { useObsStore } from "@/lib/observability/store"
 
 import { EventRow } from "./event-row"
+import { FoldRow } from "./fold-row"
 
 const KINDS: EvtKind[] = ["http", "chat", "docker", "presence", "stats", "other"]
+
+function rowKey(row: DisplayRow): string {
+  return row.kind === "event" ? row.env.id : `fold:${row.fromTs}:${row.toTs}:${row.count}`
+}
 
 export function Firehose() {
   // Only these two fields come off the store here — the rest of the row
@@ -17,6 +23,7 @@ export function Firehose() {
   // list's data prop, not every mounted row.
   const events = useObsStore((s) => s.events)
   const elidedTotal = useObsStore((s) => s.elidedTotal)
+  const degraded = useObsStore((s) => s.derived.degraded)
 
   const [activeKinds, setActiveKinds] = useState<Set<EvtKind>>(() => new Set(KINDS))
   const [paused, setPaused] = useState(false)
@@ -26,6 +33,10 @@ export function Firehose() {
     () => (showAll ? events : events.filter((e) => activeKinds.has(kindForType(e.type)))),
     [events, activeKinds, showAll],
   )
+
+  // Flow mode: fold hot same-second runs down to summary rows so an 80/s
+  // burst stays a readable list instead of a wall of identical lines.
+  const rows = useMemo(() => foldForDisplay(filtered, degraded), [filtered, degraded])
 
   function toggleKind(k: EvtKind) {
     setActiveKinds((prev) => {
@@ -77,9 +88,9 @@ export function Firehose() {
         </div>
       </div>
       <Virtuoso
-        data={filtered}
-        computeItemKey={(_, env) => env.id}
-        itemContent={(_, env) => <EventRow env={env} />}
+        data={rows}
+        computeItemKey={(_, row) => rowKey(row)}
+        itemContent={(_, row) => (row.kind === "fold" ? <FoldRow row={row} /> : <EventRow env={row.env} />)}
         followOutput={paused ? false : "smooth"}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}

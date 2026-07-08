@@ -14,8 +14,12 @@ const nodeEls = new Map<string, HTMLElement>()
 const tokenSecond = new Map<string, number>()
 const tokenCount = new Map<string, number>()
 // Module scope so ip→slot mappings survive topology remounts — same ip, same
-// slot, forever (the allocator contract in topology-model.ts).
-const slotForUpstream = makeSlotAllocator()
+// slot, forever (the allocator contract in topology-model.ts). Exported so
+// comet-canvas.tsx shares this exact instance: the pulse and the comet must
+// pick the same chat replica for the same request, or the hero "follow a
+// request through the system" moment shows two different chat nodes lighting
+// up for one upstream ip.
+export const slotForUpstream = makeSlotAllocator()
 
 export function registerNodeEl(id: string, el: HTMLElement | null): void {
   if (el) nodeEls.set(id, el)

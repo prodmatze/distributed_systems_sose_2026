@@ -20,8 +20,9 @@ import {
   type Edge,
   type NodeMouseHandler,
 } from "@xyflow/react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
+import { quantizeRate } from "@/lib/observability/fold-display"
 import { useObsStore } from "@/lib/observability/store"
 import {
   nodeStateFor,
@@ -82,8 +83,10 @@ const TOPO_BY_ID = new Map<ObsNodeId, TopoNode>(TOPO_NODES.map((n) => [n.id, n])
 
 function TopologyFlow() {
   const containers = useObsStore((s) => s.derived.containers)
+  const degraded = useObsStore((s) => s.derived.degraded)
+  const evtRate = useObsStore((s) => s.derived.evtRate)
   const [nodes, setNodes, onNodesChange] = useNodesState<ObsFlowNode>(initialNodes)
-  const [edges, , onEdgesChange] = useEdgesState<Edge<ObsEdgeData>>(initialEdges)
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<ObsEdgeData>>(initialEdges)
   const [selected, setSelected] = useState<ObsNodeId | null>(null)
   const [followMode, setFollowMode] = useState(false)
 
@@ -96,6 +99,16 @@ function TopologyFlow() {
       }),
     )
   }, [containers, setNodes])
+
+  // Same 1 Hz derived subscription drives the edges: flowMode swaps the idle
+  // SMIL dot for marching dashes, rate (quantized — see fold-display.ts) sets
+  // the dot's cadence. Quantizing before the effect dependency (not just
+  // before the SVG prop) means the effect itself only re-fires on a regime
+  // shift, not every tick — matches quantizeRate's whole purpose.
+  const rate = useMemo(() => quantizeRate(evtRate), [evtRate])
+  useEffect(() => {
+    setEdges((eds) => eds.map((e) => ({ ...e, data: { flowMode: degraded, rate } })))
+  }, [degraded, rate, setEdges])
 
   const onNodeClick = useCallback<NodeMouseHandler<ObsFlowNode>>((_, node) => {
     setSelected(node.id as ObsNodeId)

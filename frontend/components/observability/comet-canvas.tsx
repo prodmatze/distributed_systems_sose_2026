@@ -17,13 +17,10 @@ import { useNodesInitialized, useStore } from "@xyflow/react"
 import { useEffect, useRef } from "react"
 
 import { useObsStore } from "@/lib/observability/store"
-import {
-  makeSlotAllocator,
-  routeForEvent,
-  TOPO_EDGES,
-  type ObsNodeId,
-} from "@/lib/observability/topology-model"
+import { routeForEvent, TOPO_EDGES, type ObsNodeId } from "@/lib/observability/topology-model"
 import type { StoredEnvelope } from "@/lib/observability/types"
+
+import { slotForUpstream } from "./pulse-layer"
 
 export type Point = { x: number; y: number }
 
@@ -105,11 +102,6 @@ export function CometCanvas({ followMode }: { followMode: boolean }): React.JSX.
   const reducedRef = useRef(false)
   const followRef = useRef(followMode)
   const httpCountRef = useRef(0)
-  // Own module-scope-style slot allocator (pulse-layer's is not exported): a
-  // deterministic first-seen round-robin over chat replicas, per the
-  // makeSlotAllocator contract. Its ip→slot map may differ from pulse-layer's
-  // (it sees a different subset of events) but is internally consistent.
-  const slotRef = useRef(makeSlotAllocator())
 
   // xyflow's live viewport [x, y, zoom]. Kept in a ref so the draw loop reads
   // the latest without the loop depending on it (edge paths are flow-space).
@@ -148,7 +140,7 @@ export function CometCanvas({ followMode }: { followMode: boolean }): React.JSX.
   // (e.g. a raw chat.message) collapses to just browser→gateway.
   const spawnTrace = (env: StoredEnvelope, origin: CometOrigin): void => {
     if (reducedRef.current || !canSpawn(1)) return
-    const route = routeForEvent(env, slotRef.current)
+    const route = routeForEvent(env, slotForUpstream)
     const hops: [ObsNodeId, ObsNodeId][] = [["browser", "gateway"]]
     if (route.nodes[0] === "gateway" && route.nodes[1]) {
       hops.push(["gateway", route.nodes[1] as ObsNodeId])
