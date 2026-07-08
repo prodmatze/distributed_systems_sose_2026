@@ -13,6 +13,9 @@ const PULSE_CAP_PER_S = 8
 const nodeEls = new Map<string, HTMLElement>()
 const tokenSecond = new Map<string, number>()
 const tokenCount = new Map<string, number>()
+// Module scope so ip→slot mappings survive topology remounts — same ip, same
+// slot, forever (the allocator contract in topology-model.ts).
+const slotForUpstream = makeSlotAllocator()
 
 export function registerNodeEl(id: string, el: HTMLElement | null): void {
   if (el) nodeEls.set(id, el)
@@ -63,14 +66,14 @@ function fireBypassingCap(id: string, color: string): void {
 }
 
 export function attachPulseRouter(): () => void {
-  const slotForUpstream = makeSlotAllocator()
   return useObsStore.getState().onFresh((fresh) => {
     const degraded = useObsStore.getState().derived.degraded
     for (const env of fresh) {
-      if (degraded && env.type !== "docker.event") continue
+      const isDockerEvent = env.type === "docker.event"
+      if (degraded && !isDockerEvent) continue
       const { nodes, color } = routeForEvent(env, slotForUpstream)
       for (const id of nodes) {
-        if (env.type === "docker.event") fireBypassingCap(id, color)
+        if (isDockerEvent) fireBypassingCap(id, color)
         else firePulse(id, color)
       }
     }
