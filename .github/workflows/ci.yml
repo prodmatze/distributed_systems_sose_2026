@@ -33,6 +33,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          # the pnpm version comes from "packageManager", which lives in
+          # frontend/package.json, not the repo root
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           # Turbopack panics under Node 26 — keep in sync with the local Node 24 LTS pin
