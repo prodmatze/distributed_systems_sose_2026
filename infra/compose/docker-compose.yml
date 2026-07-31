@@ -140,7 +140,7 @@ services:
     restart: unless-stopped
     environment:
       CONTAINERS: 1        # GET /containers/* (list, inspect, logs, stats)
-      POST: 0              # read-only: every mutating verb 403s (widened in Plan C)
+      POST: 0              # read-only: every mutating verb 403s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     # No published ports: reachable only as socket-proxy:2375 on the compose network.
@@ -173,7 +173,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:${JAEGER_PORT:-16686}:16686"   # UI (localhost only)
-    # OTLP 4317/4318 stay compose-internal; services start exporting in Plan C.
+    # Runs but receives nothing: OTLP 4317/4318 stay compose-internal and no
+    # service is instrumented. Kept so the demo stack matches the design.
 
 volumes:
   postgres_data:

@@ -3,8 +3,8 @@
 Chorus queries finish in microseconds, so pg_stat_activity alone looks dead —
 the continuously-moving signal is DELTAS of pg_stat_statements (per-query-shape
 calls/s and mean ms) and pg_stat_database (commits/s, inserts/s, cache hit %).
-application_name attribution arrives with Plan C's one-line db.py change; until
-then rows group under an empty app name.
+Per-service attribution needs `application_name` set in shared/db.py's
+connect_args — not done, so rows group under an empty app name.
 
 pg_stat_statements requires shared_preload_libraries (compose command flag);
 CREATE EXTENSION here is idempotent belt-and-suspenders and the statements

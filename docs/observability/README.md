@@ -12,20 +12,18 @@ that breaks the chat app it's watching.
 
 ## Architecture
 
+Everything in this diagram is what actually runs today. Nothing is aspirational
+— see [What is deliberately not built](#what-is-deliberately-not-built) for the
+gaps.
+
 ```
-┌────────────────────────────── PRODUCERS ───────────────────────────────────┐
-│ auth/api/chat ─► OTel auto-instrumentation (FastAPI + asyncpg + redis)     │
-│     │            ├─► RedisSpanExporter ──► XADD obs:events                 │
-│     │            └─► OTLP ──► Jaeger all-in-one (fallback UI)              │
-│     └─► traceparent injected into chan:* payloads (cross-replica traces)   │
-│                                                                            │
-│ OBSERVER-INTERNAL taps (zero code in core services):                       │
-│   • docker events + stats        (via socket-proxy)                        │
-│   • PSUBSCRIBE chan:*            (every chat message in flight)            │
-│   • keyspace notifications       (presence:* → online/offline)             │
-│   • pg_stat_* pollers            (1–2 s diffs)                             │
-│   • nginx JSON access-log tail   (gateway hop, $request_id)                │
-└──────────────────────────────────┬─────────────────────────────────────────┘
+┌──────────── PRODUCERS (observer-internal, zero code in core services) ──────┐
+│   • docker events + stats        (via socket-proxy)                         │
+│   • PSUBSCRIBE chan:*            (every chat message in flight)             │
+│   • keyspace notifications       (presence:* → online/offline)              │
+│   • pg_stat_* pollers            (1–2 s diffs)                              │
+│   • nginx JSON access-log tail   (gateway hop, $request_id)                 │
+└──────────────────────────────────┬──────────────────────────────────────────┘
                                    ▼
                 Redis Stream obs:events (XADD MAXLEN ~2000)
                 = bus + ring buffer + replay cursor in one primitive
@@ -36,16 +34,14 @@ that breaks the chat app it's watching.
                 │ • XREAD BLOCK → live tail          │
                 │ • world-state snapshot (topology)  │
                 │ • rate-limit / coalesce per client │
-                │ • actions API (chaos + synthetic)  │
                 └───────────────┬────────────────────┘
-                                ▼ WebSocket (127.0.0.1:8090)
-                frontend /observability (mission control + tabs)
+                                ▼ WebSocket (127.0.0.1:8090), read-only
+                frontend /observability (Overview tab)
 ```
 
-As of this task (Plan A), the bus, the observer service, and five zero-touch
-producers (docker, redis tap, redis stats, pg stats, nginx log) are live. The
-OTel span exporter, `/observability` frontend, and the actions API (chaos +
-synthetic bots) are Plan B/C — not yet built; see [Links](#links).
+The core services emit nothing. Every signal above already existed — the
+observer only taps it, which is what makes the failure-isolation contract below
+hold by construction rather than by discipline.
 
 ## Running it
 
@@ -73,9 +69,52 @@ explicitly, and the two knobs agree (`docker compose config` shows
 |---|---|---|
 | Observer health | `http://127.0.0.1:8090/observer/health` | `{"ok": true, "service": "observer"}` |
 | Observer WS | `ws://127.0.0.1:8090/observer/ws` | snapshot → history → live tail |
-| Jaeger UI | `http://127.0.0.1:16686` | span waterfalls once OTel lands (Plan C) |
+| Dashboard | `http://localhost:3000/observability` | Overview tab; needs `npm run dev` in `frontend/` |
+| Jaeger UI | `http://127.0.0.1:16686` | runs, but **receives nothing** — no exporter is wired |
 | Gateway | `http://localhost:8080` | unchanged — `/auth`, `/api`, `/ws` |
-| Frontend | `http://localhost:3000` | unchanged — `/observability` route lands in Plan B |
+| Frontend | `http://localhost:3000` | unchanged — chat app at `/chat` |
+
+With `ALTPORTS=1` every host port shifts into a high range: gateway `18080`,
+postgres `15432`, redis `16379`, observer `18090`, jaeger `18686`. `make ports`
+prints the effective set.
+
+## The dashboard
+
+`frontend/app/observability` — a single client route, lazy-loaded so xyflow and
+the topology tree stay out of the chat app's bundle.
+
+```bash
+make obs-up                          # the observer must be running first
+builtin cd frontend && npm run dev   # then http://localhost:3000/observability
+```
+
+The `make obs-up` step is not optional: without it the page renders a strip of
+zeros and an empty feed, with the connection pill the only clue. The pill is
+top-right and reads `CONNECTING` → `LIVE`, or `RECONNECTING` / `OFFLINE` when
+the observer is unreachable. `RECONNECTING` is self-healing — the client backs
+off and resumes from its last event id, so leaving the tab open across an
+`obs-down`/`obs-up` cycle is fine.
+
+`?mock=1` swaps the live WebSocket for a deterministic recorded stream
+(`lib/observability/mock.ts`). No backend, no Docker — useful for UI work and
+for demoing when the stack is down. It is the only way to see the dashboard
+populated without the full stack up.
+
+**Non-default observer port.** The client defaults to
+`ws://127.0.0.1:8090/observer/ws`. Under `ALTPORTS=1` the observer moves to
+`18090` and the dashboard will silently fail to connect until you point it at
+the new port — create `frontend/.env.local`:
+
+```
+NEXT_PUBLIC_OBSERVER_WS_URL=ws://127.0.0.1:18090/observer/ws
+```
+
+**Only the Overview tab is live.** `TRACES`, `CHAT`, `REDIS`, `DATABASE` and
+`CONTAINERS` render as disabled buttons — `tab-bar.tsx` gates them behind an
+`ENABLED` set of one. Overview carries the stat strip, the React Flow topology
+(node health, CPU-bound glow, request comets, flow-mode degradation above
+~50 ev/s), the filterable event firehose, and a per-container detail drawer on
+node click.
 
 ## The event envelope
 
@@ -86,10 +125,10 @@ Every producer emits the same shape (`observer/bus.py::Envelope`):
   "id": "1720374000123-0",        // Redis stream ID = monotonic cursor (resume)
   "type": "http.request | chat.message | chat.message.summary | docker.event | docker.stats |
            docker.containers | presence.online | presence.offline | db.stats | redis.stats |
-           observer.health | span | ...",
+           observer.health",
   "service": "api | auth | chat | gateway | postgres | redis | docker | observer",
   "ts": "2026-07-07T18:30:00.123Z",
-  "corr": "trace_id | $request_id | null",   // cross-plane correlation
+  "corr": "$request_id | null",   // gateway hop only — see below
   "payload": { /* type-specific */ }
 }
 ```
@@ -138,9 +177,9 @@ than chase a queue it can't drain.
 
 ## Security posture
 
-The observer is a control plane for the whole Docker host — nothing about
-that is safe to expose past `localhost`, so every layer assumes it never will
-be:
+The observer reads the whole Docker host and every chat message in flight —
+nothing about that is safe to expose past `localhost`, so every layer assumes
+it never will be:
 
 - **Localhost bind.** `ports: ["127.0.0.1:8090:8000"]` — unreachable from
   outside the host, not routed through the gateway. CORS pinned to
@@ -177,11 +216,13 @@ be:
   Request forbidden by administrative rules.
   </body></html>
   ```
-  (`POST` widens minimally in Plan C — only `kill`/`stop`/`restart`/`start`,
-  the verbs chaos actions need — behind an observer-side protected set of
-  `{postgres, redis, socket-proxy, observer}` that stays untouchable.)
-- **No auth in MVP, by design.** The control plane inherits the trust of the
-  machine it binds to; it is never deployed past a developer's laptop.
+  If chaos actions are ever added, `POST` widens minimally — only
+  `kill`/`stop`/`restart`/`start`, and behind an observer-side protected set of
+  `{postgres, redis, socket-proxy, observer}` that stays untouchable. The
+  read-only proxy stays as it is; the widened verbs get a second proxy, so this
+  boundary is never traded away.
+- **No auth, by design.** The observer inherits the trust of the machine it
+  binds to; it is never deployed past a developer's laptop.
 - **Chat visibility.** The observer's `chan:*` subscription tap sees full chat message bodies on the bus.
   This is acceptable for this dev-only, localhost-bound tool and is a deliberate, documented trade-off.
 
@@ -230,6 +271,52 @@ fine."
 notifications), and Compose treats that as a config diff requiring
 recreation. Named volumes persist, `migrate` re-runs idempotently; a brief
 "Restarting" blip during `obs-up` is expected, not a failure.
+
+## What is deliberately not built
+
+Stated plainly so nobody greps for it and comes up empty. The design spec
+(`docs/superpowers/specs/`) describes all of this; none of it is in the tree.
+
+- **Distributed tracing.** No OpenTelemetry anywhere — no instrumentation, no
+  deps, no exporter. Jaeger runs but is a dark container: its OTLP ports stay
+  compose-internal and nothing sends to them. The `corr` field is real but
+  narrow — nginx generates `$request_id`, forwards it upstream as
+  `X-Request-ID`, and the log tail surfaces it on `http.request` events. No
+  Python service reads that header, and the Redis pub/sub payload carries no
+  id, so correlation stops at the gateway hop. There are no spans, no
+  parent/child links, and no per-hop durations; a trace waterfall needs either
+  OTel or a hand-rolled correlation emitter through `chat/pubsub.py`.
+- **The actions API.** There is no control plane. The observer exposes exactly
+  two routes — `GET /observer/health` and the WebSocket — and the WS handler
+  never reads from the client, so a command cannot even be expressed. The
+  socket-proxy is pinned `POST: 0`, which 403s every mutating Docker verb at a
+  second, independent layer. No chaos buttons, no bot engine, no `obs_` cleanup
+  sweep. Kill a node from a terminal (below).
+- **Five of six dashboard tabs.** Only Overview exists.
+- **Kubernetes.** `infra/k8s/` is a README. The kill-a-node demo runs on
+  Compose.
+
+## Killing a node by hand
+
+Until chaos buttons exist, the keystone demo is two terminal commands:
+
+```bash
+docker kill chorus-chat-2     # dashboard plays running → dead
+docker start chorus-chat-2    # → running again
+```
+
+**The killed container does not come back on its own**, despite
+`restart: unless-stopped`. Docker treats an explicit `docker kill`/`docker stop`
+as user-initiated and suppresses the restart policy — verified live:
+`RestartCount` stays `0` and no restart event is emitted. The policy still
+covers real crashes and OOMs, which is what it is there for. For the demo this
+is an advantage: the node stays visibly dead for as long as you want to narrate
+it, and heals exactly when you say so.
+
+Delivery survives the kill. Verified end-to-end through the gateway with two
+users pinned to different replicas via `?uid=`: the surviving replicas keep
+serving, and the evicted client reconnects with `last_seen_id` and backfills
+what it missed.
 
 ## Report-worthy talking points
 

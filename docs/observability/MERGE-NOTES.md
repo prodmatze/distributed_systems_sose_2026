@@ -102,7 +102,8 @@ docs/observability/**) are not listed.
   default and alt ports recreates the affected containers (new host binding) —
   volumes persist, so no data loss.
 
-Planned for Plan C (not yet applied): `backend/shared/pyproject.toml` (+OTel deps),
-new `shared/telemetry.py`, 2-line init in each service main.py, ~4 call-site
-lines in `chat/pubsub.py`, `application_name` in `shared/db.py`, socket-proxy
-POST widening for chaos actions.
+Not applied, and listed here so the blast radius of the remaining work is known
+up front: `backend/shared/pyproject.toml` (+OTel deps), new
+`shared/telemetry.py`, 2-line init in each service main.py, ~4 call-site lines
+in `chat/pubsub.py`, `application_name` in `shared/db.py`, and a second
+socket-proxy with POST widened for chaos actions.
