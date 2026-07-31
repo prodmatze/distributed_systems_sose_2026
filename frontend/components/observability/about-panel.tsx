@@ -86,6 +86,12 @@ nginx log      ─┘                     replay)`}</pre>
               one. Comets are brief, so this is what tells you which paths are in use between them.
             </li>
             <li>
+              <strong>Sending a chat message produces only the pink comets, not blue ones.</strong>{" "}
+              The message travels over a WebSocket that is already open, so no new HTTP request is
+              made and the gateway has nothing to log. Blue comets appear when the app actually calls
+              the REST API: logging in, listing channels, loading history, joining a channel.
+            </li>
+            <li>
               <strong>You will not see a comet travelling into Redis from a chat replica</strong>,
               only the three coming out. Redis does not tell a subscriber which client published a
               message, and the message itself carries the sender&apos;s user id, not the replica that
