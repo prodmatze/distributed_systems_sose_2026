@@ -139,6 +139,127 @@ const EXITED_ACTIONS = new Set(["die", "stop", "kill", "oom"])
 
 export type EventRoute = { nodes: ObsNodeId[]; color: string }
 
+export function edgeId(source: ObsNodeId, target: ObsNodeId): string {
+  return `e:${source}:${target}`
+}
+
+const CHAT_NODE_LIST: ObsNodeId[] = ["chat-1", "chat-2", "chat-3"]
+
+// Which *wires* an envelope travelled, as opposed to which nodes it lights
+// (routeForEvent). Each edge is then animated at its own measured rate instead
+// of every edge sharing one global number — a gateway→auth hop must not make
+// chat-3→redis twitch.
+//
+// Only edges we can genuinely attribute are returned. The *→postgres wires are
+// deliberately absent: the nginx log stops at the gateway hop and the chan:*
+// tap cannot say which replica performed the INSERT, so there is no honest
+// per-request signal for them. They stay quiet rather than animate on a guess.
+export type EdgeHit = { id: string; reverse: boolean }
+
+export function edgesForEvent(e: Envelope, slotForUpstream: (ip: string) => number): EdgeHit[] {
+  if (e.type === "http.request") {
+    let target: ObsNodeId | null
+    if (e.service === "chat") {
+      const ip = typeof e.payload.upstream === "string" ? e.payload.upstream : ""
+      target = `chat-${slotForUpstream(ip)}` as ObsNodeId
+    } else {
+      target = SINGLE_SERVICE_NODE[e.service] ?? null
+    }
+    // Every gateway hop crossed the browser→gateway wire to get there. Both
+    // travel in the declared source→target direction: browser to gateway to
+    // service, which is how the request really moves.
+    const edges: EdgeHit[] = [{ id: edgeId("browser", "gateway"), reverse: false }]
+    if (target && target !== "gateway") edges.push({ id: edgeId("gateway", target), reverse: false })
+    return edges
+  }
+
+  // A published chat message is a FANOUT: Redis pushes it to every replica
+  // holding the `chan:*` pattern. The wires are declared chat→redis for layout,
+  // so the fanout has to be drawn travelling backwards along them, otherwise
+  // the picture claims messages flow into Redis and never come out — which is
+  // the exact opposite of what pub/sub does, and the whole point of the demo.
+  if (e.type === "chat.message" || e.type === "chat.message.summary") {
+    return CHAT_NODE_LIST.map((n) => ({ id: edgeId(n, "redis"), reverse: true }))
+  }
+
+  // Presence is the other direction for real: a replica writes presence:<uid>
+  // with a TTL, and the keyspace notification is the echo of that write.
+  if (e.type.startsWith("presence.")) {
+    return CHAT_NODE_LIST.map((n) => ({ id: edgeId(n, "redis"), reverse: false }))
+  }
+
+  return []
+}
+
+// Periodic pollers. They are real events, but they arrive on a fixed cadence
+// whether or not anything is happening, so in a "what has this node been doing"
+// list they would bury every event that actually means something.
+const POLL_TYPES = new Set([
+  "db.stats",
+  "redis.stats",
+  "docker.stats",
+  "docker.containers",
+  "observer.health",
+])
+
+// Does this envelope represent activity ON this node? Reuses routeForEvent so
+// the drawer, the pulses and the edges can never disagree about which replica
+// served a request.
+export function isNodeActivity(
+  e: Envelope,
+  id: ObsNodeId,
+  slotForUpstream: (ip: string) => number,
+): boolean {
+  if (POLL_TYPES.has(e.type)) return false
+  return routeForEvent(e, slotForUpstream).nodes.includes(id)
+}
+
+// One-line human summary of an event, for the node drawer. Every payload read
+// is defensive — the observer forwards producer payloads verbatim.
+export function describeEvent(e: Envelope): string {
+  const p = e.payload
+  if (e.type === "http.request") {
+    const method = typeof p.method === "string" ? p.method : "?"
+    const uri = typeof p.uri === "string" ? p.uri : "?"
+    const status = typeof p.status === "number" ? p.status : "?"
+    const ms = typeof p.rt_ms === "number" ? ` · ${p.rt_ms.toFixed(0)}ms` : ""
+    return `${method} ${uri} → ${status}${ms}`
+  }
+  if (e.type === "chat.message") {
+    const msg = (p.message ?? {}) as Record<string, unknown>
+    const who = typeof msg.sender_username === "string" ? msg.sender_username : "?"
+    const body = typeof msg.body === "string" ? msg.body : ""
+    return `${who}: ${body}`
+  }
+  if (e.type === "chat.message.summary") {
+    const n = typeof p.count === "number" ? p.count : 0
+    return `${n} messages (folded)`
+  }
+  if (e.type.startsWith("presence.")) {
+    const user = p.user_id ?? p.user ?? "?"
+    return `user ${user} ${e.type.slice("presence.".length)}`
+  }
+  if (e.type === "docker.event") {
+    const action = typeof p.action === "string" ? p.action : "?"
+    const code = p.exit_code ? ` (${p.exit_code})` : ""
+    return `${action}${code}`
+  }
+  return e.type
+}
+
+// Smoothed per-edge events/s → a 0–4 activity level. Quantized on purpose:
+// browsers restart <animateMotion> whenever `dur` changes, so a continuously
+// varying duration would reset the dot every tick. Level 0 means *silent* —
+// the edge renders as a bare hairline, so "nothing moving" honestly means
+// "nothing measured on this wire".
+export function edgeLevel(rate: number): 0 | 1 | 2 | 3 | 4 {
+  if (rate < 0.15) return 0
+  if (rate < 1) return 1
+  if (rate < 5) return 2
+  if (rate < 20) return 3
+  return 4
+}
+
 // Which nodes a single envelope should light, and in what hue. Pure given the
 // slot allocator (which the caller owns so slots persist across events). Every
 // field read off the untyped payload is defensive.
