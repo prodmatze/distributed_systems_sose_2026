@@ -499,10 +499,6 @@
   overflow-wrap: anywhere;
 }
 
-/* Dots are never unmounted, only faded, so a wire going quiet does not delete a
-   dot mid-path. The transition is what turns that on and off smoothly. */
-.obs .obs-edge-dot { transition: opacity 600ms ease, r 300ms ease; }
-
 /* Event feed. The wrapper must be the flex child that takes the leftover
    height (flex:1 + min-height:0) and establish the positioning context for the
    jump button; Virtuoso then fills it at height:100%. Without min-height:0 a
@@ -645,7 +641,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .obs .obs-pulse,
-  .obs .obs-edge-dot,
   .obs canvas.obs-comet { display: none !important; }
   .obs .obs-edge-flow { animation: none !important; }
 }

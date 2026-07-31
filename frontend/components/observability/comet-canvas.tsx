@@ -73,9 +73,12 @@ const HEAD_R = 3.5 // flow-space radius; scales with zoom
 const HEAD_BLUR = 12
 const TRAIL_STEP = 0.05 // global-progress spacing between trail samples
 const PARTICLES_PER_COMET = TRAIL + 1
-const MAX_PARTICLES = 512 // hard cap — kill-demo bursts stay smooth
-const MAX_FOLLOW_COMETS = 4 // FOLLOW mode: at most 4 concurrent
-const FOLLOW_EVERY = 4 // sample every ~4th http.request
+// Safety backstop only, never a display policy: one comet per event is what
+// gets drawn. A comet lives 0.38s per hop and costs 9 particles, so even 50
+// events/s needs only ~342 particles. Above that the store flips `degraded`
+// and flow mode takes over anyway, so this cap should never be the thing
+// deciding what the user sees.
+const MAX_PARTICLES = 512
 const TAU = Math.PI * 2
 
 // Position of a comet at global progress g∈[0,1] across all its hops. Reversed
@@ -92,7 +95,7 @@ function posAt(comet: Comet, g: number): Point {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function CometCanvas({ followMode }: { followMode: boolean }): React.JSX.Element {
+export function CometCanvas(): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const cometsRef = useRef<Comet[]>([])
   const lutsRef = useRef<Map<string, Point[]>>(new Map())
@@ -100,8 +103,6 @@ export function CometCanvas({ followMode }: { followMode: boolean }): React.JSX.
   const dprRef = useRef(1)
   const colorsRef = useRef({ head: "#6ee7f7", redis: "#ff7a90" })
   const reducedRef = useRef(false)
-  const followRef = useRef(followMode)
-  const httpCountRef = useRef(0)
 
   // xyflow's live viewport [x, y, zoom]. Kept in a ref so the draw loop reads
   // the latest without the loop depending on it (edge paths are flow-space).
@@ -274,34 +275,34 @@ export function CometCanvas({ followMode }: { followMode: boolean }): React.JSX.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesInitialized])
 
-  // The draw loop reads the viewport transform and the event router reads
-  // followMode through refs, synced after commit — so neither the rAF loop nor
-  // the store subscription re-binds or re-renders when they change.
+  // The draw loop reads the viewport transform through a ref, synced after
+  // commit, so the rAF loop never re-binds when the viewport changes.
   useEffect(() => {
     transformRef.current = transform
   }, [transform])
-  useEffect(() => {
-    followRef.current = followMode
-  }, [followMode])
 
-  // Per-batch event router — zero React. Reads followMode/selectedCorr through
-  // refs/getState so the subscription itself never needs re-binding.
+  // Per-batch event router — zero React. Reads selectedCorr through getState
+  // so the subscription itself never needs re-binding.
   useEffect(() => {
     return useObsStore.getState().onFresh((fresh) => {
       if (reducedRef.current) return
+      // One comet per event. No sampling and no display cap: the number of
+      // comets in flight IS the number of events happening. Above ~50 events/s
+      // the store sets `degraded`, the edges switch to flow-mode dashes, and
+      // tracing individual events stops meaning anything, so comets stand down
+      // rather than degenerate into a swarm.
+      if (useObsStore.getState().derived.degraded) return
+
       const selectedCorr = useObsStore.getState().selectedCorr
       for (const env of fresh) {
-        if (selectedCorr && env.corr === selectedCorr) spawnTrace(env, "trace")
-        if (env.type === "chat.message" && (selectedCorr || followRef.current)) spawnFanout()
-        if (followRef.current && env.type === "http.request") {
-          httpCountRef.current += 1
-          if (
-            httpCountRef.current % FOLLOW_EVERY === 0 &&
-            cometsRef.current.filter((c) => c.origin === "follow").length < MAX_FOLLOW_COMETS
-          ) {
-            spawnTrace(env, "follow")
-          }
+        if (selectedCorr && env.corr === selectedCorr) {
+          spawnTrace(env, "trace")
+          continue
         }
+        // The fanout is the moment worth seeing: one PUBLISH leaves Redis and
+        // arrives at all three replicas at once.
+        if (env.type === "chat.message") spawnFanout()
+        else if (env.type === "http.request") spawnTrace(env, "follow")
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

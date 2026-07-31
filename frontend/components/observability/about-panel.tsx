@@ -75,17 +75,27 @@ nginx log      ─┘                     replay)`}</pre>
           <h3 className="obs-micro">READING THE TOPOLOGY</h3>
           <ul className="obs-about-list">
             <li>
-              <strong>Moving dots show measured traffic on that specific connection.</strong> More
-              dots and a faster loop mean more events per second. A connection with no dots is idle.
+              <strong>Bright comets with a trail are individual events.</strong> Each one is a real
+              request or message being traced through the system as it happens. A blue comet follows
+              a request from the browser through the gateway to whichever service handled it. Three
+              pink comets leaving Redis at the same moment are one chat message being delivered to
+              all three replicas at once, which is what publish/subscribe does.
             </li>
             <li>
-              <strong>Blue dots move in the direction of a request</strong>, from the browser through
-              the gateway to a service.
+              <strong>A connection that is carrying traffic is drawn brighter</strong> than an idle
+              one. Comets are brief, so this is what tells you which paths are in use between them.
             </li>
             <li>
-              <strong>Pink dots move outward from Redis</strong> to all three chat replicas. This is
-              the publish/subscribe delivery: one replica publishes a message, and Redis pushes it to
-              every replica so it reaches users connected to any of them.
+              <strong>You will not see a comet travelling into Redis from a chat replica</strong>,
+              only the three coming out. Redis does not tell a subscriber which client published a
+              message, and the message itself carries the sender&apos;s user id, not the replica that
+              handled it. Drawing an inbound comet would mean picking a replica at random, so nothing
+              is drawn instead.
+            </li>
+            <li>
+              One comet is drawn per event, with no sampling. Above roughly 50 events per second the
+              view switches to flow mode and comets stop, because tracing individual events is not
+              readable at that rate.
             </li>
             <li>
               <strong>The connections to Postgres never animate.</strong> The gateway log only records

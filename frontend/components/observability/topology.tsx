@@ -94,7 +94,6 @@ function TopologyFlow() {
   const [nodes, setNodes, onNodesChange] = useNodesState<ObsFlowNode>(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<ObsEdgeData>>(initialEdges)
   const [selected, setSelected] = useState<ObsNodeId | null>(null)
-  const [followMode, setFollowMode] = useState(false)
 
   // 1 Hz: fold fresh container state into node data, preserving measurement.
   useEffect(() => {
@@ -181,21 +180,6 @@ function TopologyFlow() {
     <>
       <div className="obs-panel-title">
         SYSTEM TOPOLOGY
-        <button
-          type="button"
-          className="obs-chip"
-          aria-pressed={followMode}
-          onClick={() => setFollowMode((v) => !v)}
-          style={{
-            marginLeft: "auto",
-            cursor: "pointer",
-            color: followMode ? "var(--accent)" : "var(--text-2)",
-            borderColor: followMode ? "var(--accent-border)" : "var(--border-1)",
-            background: followMode ? "var(--accent-dim)" : "transparent",
-          }}
-        >
-          ⌁ FOLLOW
-        </button>
       </div>
       <div className="obs-topo-canvas">
         <ReactFlow
@@ -218,7 +202,7 @@ function TopologyFlow() {
           <Background gap={22} size={1} color="var(--border-1)" />
           <Controls showInteractive={false} />
         </ReactFlow>
-        <CometCanvas followMode={followMode} />
+        <CometCanvas />
         {selected && <NodeDrawer id={selected} onClose={() => setSelected(null)} />}
       </div>
     </>
