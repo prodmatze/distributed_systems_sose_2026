@@ -63,11 +63,11 @@ Shipped and working:
 | Containerised deployment | Docker Compose runs the whole system, including replica scaling |
 | Observability | A dedicated service taps the running system and streams it to a live dashboard |
 
-Not done, and honest about it: **Kubernetes manifests** (`infra/k8s/` holds only a README — the demo runs on Compose), **CI** (a GitHub Actions workflow exists on a separate branch, not merged), and **distributed tracing** (the Jaeger container runs but nothing is instrumented, so it receives no spans).
+Out of scope: **Kubernetes** (`infra/k8s/` holds only a README — the demo runs on Docker Compose), **CI/CD**, and **distributed tracing** (the Jaeger container is wired into Compose but no service is instrumented, so it receives no spans).
 
 ## Running it
 
-Requires Docker with Compose v2, pnpm 10, and Node — see the note on the version pin below.
+Requires Docker with Compose v2, Node 20.9 or newer, and pnpm 10.
 
 ```bash
 make setup      # creates infra/compose/.env — set JWT_SECRET and POSTGRES_PASSWORD
@@ -86,8 +86,6 @@ Register two users in two browser windows to see messages cross replicas. `make 
 
 <details>
 <summary>Other targets, ports, and troubleshooting</summary>
-
-**Node version.** `frontend/package.json` pins `engines: ">=26 <27"` and `frontend/.npmrc` sets `engine-strict=true`, so pnpm refuses to run any script on another version. If `make demo` stops with an engines error, either install Node 26 or relax that pin — the app itself builds and runs on Node 22 and later.
 
 `make` on its own lists everything. The ones worth knowing: `make dev` (same as `demo` but without the observability services), `make health` (curl both gateway health endpoints), `make logs`, `make ps`, `make obs-down` (stop everything), `make clean` (stop **and delete the data volumes**).
 
