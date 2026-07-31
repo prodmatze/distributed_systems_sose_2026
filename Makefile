@@ -35,12 +35,14 @@ FRONTEND_PORT ?= 3000
 export GATEWAY_PORT POSTGRES_PORT REDIS_PORT OBSERVER_PORT JAEGER_PORT
 
 .DEFAULT_GOAL := help
-.PHONY: help dev backend frontend up down stop restart logs ps build rebuild migrate health clean install setup obs-up obs-down obs-logs obs-smoke ports
+.PHONY: help dev demo backend frontend up down stop restart logs ps build rebuild migrate health clean install setup obs-up obs-down obs-logs obs-smoke ports
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
 dev: backend frontend ## Start backend (detached) + frontend (foreground)
+
+demo: obs-up frontend ## Everything: backend, observability layer, and the frontend
 
 # The gateway pins users to chat replicas by container name (chorus-chat-1..3
 # in infra/nginx/nginx.conf) and refuses to start if any of them is missing,
