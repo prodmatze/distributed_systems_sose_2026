@@ -29,6 +29,9 @@ __pycache__/
 .claude/
 .agents/
 
+#misc
+.playwright-mcp/
+
 # local working notes, not part of the repo
 docs/sessions/
 docs/superpowers/
