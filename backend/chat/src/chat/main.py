@@ -26,6 +26,7 @@ from chat.connections import Connection, ConnectionManager
 from chat.pubsub import PubSubBridge
 from chat.repo import get_backlog, get_member_channel_ids, get_username, insert_message
 from chat.schemas import ChatMessage, ErrorEvent, InboundMessage, ReadyEvent
+from shared import obs
 from shared.db import async_session_factory
 from shared.settings import settings
 
@@ -107,6 +108,12 @@ async def ws_endpoint(ws: WebSocket, token: str | None = None, last_seen_id: int
 
         await _send(ws, ReadyEvent(channels=sorted(channel_ids)))
         await _refresh_presence(redis, user_id)
+        await obs.emit(
+            redis,
+            type="ws.connect",
+            service="chat",
+            payload={"user_id": user_id, "username": username, "channels": sorted(channel_ids)},
+        )
 
         while True:
             try:
@@ -125,6 +132,12 @@ async def ws_endpoint(ws: WebSocket, token: str | None = None, last_seen_id: int
     finally:
         manager.remove(conn)
         logger.info("user %s disconnected", user_id)
+        await obs.emit(
+            redis,
+            type="ws.disconnect",
+            service="chat",
+            payload={"user_id": user_id, "username": username},
+        )
 
 
 async def _handle_inbound(
@@ -165,6 +178,21 @@ async def _handle_inbound(
         # Publish only — fanout (incl. back to this sender) happens via the listener.
         await bridge.publish(inbound.channel_id, canonical.model_dump(mode="json"))
         await _refresh_presence(redis, conn.user_id)
+        # Announce the hop nothing outside this process can see: which replica
+        # accepted this WebSocket frame and published it. Fire-and-forget, after
+        # the message is already durable and fanned out, so it cannot delay or
+        # fail the send.
+        await obs.emit(
+            redis,
+            type="ws.message",
+            service="chat",
+            payload={
+                "channel_id": inbound.channel_id,
+                "message_id": message.id,
+                "user_id": conn.user_id,
+                "username": conn.username,
+            },
+        )
         return
 
     await _send(conn.ws, ErrorEvent(detail=f"unknown message type: {msg_type!r}"))

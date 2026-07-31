@@ -173,6 +173,26 @@ export function edgesForEvent(e: Envelope, slotForUpstream: (ip: string) => numb
     return edges
   }
 
+  // The send path: the frame crossed the gateway to a replica, which then
+  // published it. This is the half of the message journey the outside-in taps
+  // cannot see, so it only exists because chat announces it.
+  if (e.type === "ws.message") {
+    const replica = replicaNode(e.payload.replica, slotForUpstream)
+    return [
+      { id: edgeId("browser", "gateway"), reverse: false },
+      { id: edgeId("gateway", replica), reverse: false },
+      { id: edgeId(replica, "redis"), reverse: false },
+    ]
+  }
+
+  if (e.type === "ws.connect" || e.type === "ws.disconnect") {
+    const replica = replicaNode(e.payload.replica, slotForUpstream)
+    return [
+      { id: edgeId("browser", "gateway"), reverse: false },
+      { id: edgeId("gateway", replica), reverse: false },
+    ]
+  }
+
   // A published chat message is a FANOUT: Redis pushes it to every replica
   // holding the `chan:*` pattern. The wires are declared chat→redis for layout,
   // so the fanout has to be drawn travelling backwards along them, otherwise
@@ -215,7 +235,7 @@ export function isNodeActivity(
   // the first node that *handled* it. But every one of those requests was made
   // by a client, which is exactly what the browser node stands for, so it needs
   // its own rule or its drawer can never match anything.
-  if (id === "browser") return e.type === "http.request"
+  if (id === "browser") return e.type === "http.request" || e.type.startsWith("ws.")
   return routeForEvent(e, slotForUpstream).nodes.includes(id)
 }
 
@@ -234,7 +254,16 @@ export function describeEvent(e: Envelope): string {
     const msg = (p.message ?? {}) as Record<string, unknown>
     const who = typeof msg.sender_username === "string" ? msg.sender_username : "?"
     const body = typeof msg.body === "string" ? msg.body : ""
-    return `${who}: ${body}`
+    return `fanout · ${who}: ${body}`
+  }
+  if (e.type === "ws.message") {
+    return `sent by ${p.username ?? p.user_id ?? "?"} → #${p.channel_id ?? "?"}`
+  }
+  if (e.type === "ws.connect") {
+    return `${p.username ?? p.user_id ?? "?"} connected`
+  }
+  if (e.type === "ws.disconnect") {
+    return `${p.username ?? p.user_id ?? "?"} disconnected`
   }
   if (e.type === "chat.message.summary") {
     const n = typeof p.count === "number" ? p.count : 0
@@ -268,16 +297,36 @@ export function edgeLevel(rate: number): 0 | 1 | 2 | 3 | 4 {
 // Which nodes a single envelope should light, and in what hue. Pure given the
 // slot allocator (which the caller owns so slots persist across events). Every
 // field read off the untyped payload is defensive.
+// nginx reports an upstream as "172.18.0.9:8000"; a chat replica announcing
+// itself reports "172.18.0.9". Strip the port so both resolve to the SAME slot,
+// otherwise a request and the message it carried would light different replicas.
+function replicaNode(addr: unknown, slotForUpstream: (ip: string) => number): ObsNodeId {
+  const ip = typeof addr === "string" ? addr.split(":")[0] : ""
+  return `chat-${slotForUpstream(ip)}` as ObsNodeId
+}
+
 export function routeForEvent(e: Envelope, slotForUpstream: (ip: string) => number): EventRoute {
   if (e.type === "http.request") {
     let target: ObsNodeId | null
     if (e.service === "chat") {
-      const ip = typeof e.payload.upstream === "string" ? e.payload.upstream : ""
-      target = `chat-${slotForUpstream(ip)}` as ObsNodeId
+      target = replicaNode(e.payload.upstream, slotForUpstream)
     } else {
       target = SINGLE_SERVICE_NODE[e.service] ?? null
     }
     return { nodes: target ? ["gateway", target] : ["gateway"], color: "var(--evt-http)" }
+  }
+
+  // Emitted by the chat service itself — the WebSocket hop nothing outside the
+  // process can observe. ws.message continues on to Redis, because publishing is
+  // what the replica does next with the frame it just accepted.
+  if (e.type === "ws.message") {
+    return {
+      nodes: ["gateway", replicaNode(e.payload.replica, slotForUpstream), "redis"],
+      color: "var(--evt-ws)",
+    }
+  }
+  if (e.type === "ws.connect" || e.type === "ws.disconnect") {
+    return { nodes: ["gateway", replicaNode(e.payload.replica, slotForUpstream)], color: "var(--evt-ws)" }
   }
 
   if (e.type === "chat.message" || e.type === "chat.message.summary") {

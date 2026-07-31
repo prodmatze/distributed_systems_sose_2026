@@ -101,7 +101,7 @@ export function CometCanvas(): React.JSX.Element {
   const lutsRef = useRef<Map<string, Point[]>>(new Map())
   const rafRef = useRef<number | null>(null)
   const dprRef = useRef(1)
-  const colorsRef = useRef({ head: "#6ee7f7", redis: "#ff7a90" })
+  const colorsRef = useRef({ head: "#6ee7f7", redis: "#ff7a90", ws: "#4ade80" })
   const reducedRef = useRef(false)
 
   // xyflow's live viewport [x, y, zoom]. Kept in a ref so the draw loop reads
@@ -142,14 +142,17 @@ export function CometCanvas(): React.JSX.Element {
   const spawnTrace = (env: StoredEnvelope, origin: CometOrigin): void => {
     if (reducedRef.current || !canSpawn(1)) return
     const route = routeForEvent(env, slotForUpstream)
-    const hops: [ObsNodeId, ObsNodeId][] = [["browser", "gateway"]]
-    if (route.nodes[0] === "gateway" && route.nodes[1]) {
-      hops.push(["gateway", route.nodes[1] as ObsNodeId])
-    }
+    // Chain through every node the router named, not just the first two. A
+    // ws.message routes gateway→replica→redis, so the comet flies the whole
+    // journey the frame actually took: browser, gateway, the replica that
+    // accepted it, and on into Redis.
+    const chain: ObsNodeId[] = ["browser", ...(route.nodes as ObsNodeId[])]
+    const hops: [ObsNodeId, ObsNodeId][] = []
+    for (let i = 0; i < chain.length - 1; i++) hops.push([chain[i], chain[i + 1]])
     const segments = hops
       .map(([a, b]) => resolveHop(a, b))
       .filter((s): s is Segment => s !== null)
-    spawn(segments, colorsRef.current.head, origin)
+    spawn(segments, route.color === "var(--evt-ws)" ? colorsRef.current.ws : colorsRef.current.head, origin)
   }
 
   // The fanout moment: 3 simultaneous comets radiating redis→chat-1..3.
@@ -251,7 +254,8 @@ export function CometCanvas(): React.JSX.Element {
       const cs = getComputedStyle(root)
       const head = cs.getPropertyValue("--accent-strong").trim()
       const redis = cs.getPropertyValue("--evt-redis").trim()
-      colorsRef.current = { head: head || "#6ee7f7", redis: redis || "#ff7a90" }
+      const ws = cs.getPropertyValue("--evt-ws").trim()
+      colorsRef.current = { head: head || "#6ee7f7", redis: redis || "#ff7a90", ws: ws || "#4ade80" }
     }
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)")
     reducedRef.current = mq.matches
@@ -302,7 +306,11 @@ export function CometCanvas(): React.JSX.Element {
         // The fanout is the moment worth seeing: one PUBLISH leaves Redis and
         // arrives at all three replicas at once.
         if (env.type === "chat.message") spawnFanout()
-        else if (env.type === "http.request") spawnTrace(env, "follow")
+        // ws.message is the other half of that story — the frame arriving at a
+        // replica and being published. Together they draw a whole message.
+        else if (env.type === "http.request" || env.type.startsWith("ws.")) {
+          spawnTrace(env, "follow")
+        }
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -13,6 +13,10 @@ const UNKNOWN_MAX = 80
 export function kindForType(type: string): EvtKind {
   if (type === "http.request") return "http"
   if (type === "chat.message" || type === "chat.message.summary") return "chat"
+  // Emitted by the chat service itself: ws.message is a send, connect and
+  // disconnect are a user attaching to or leaving a replica.
+  if (type === "ws.message") return "chat"
+  if (type === "ws.connect" || type === "ws.disconnect") return "presence"
   if (type.startsWith("docker.")) return "docker"
   if (type.startsWith("presence.")) return "presence"
   if (type === "db.stats" || type === "redis.stats" || type === "observer.health") return "stats"
@@ -83,6 +87,18 @@ export function summarizeEvent(e: Envelope): string {
     case "docker.stats": {
       const stats = obj(p.stats)
       return `stats for ${Object.keys(stats).length} containers`
+    }
+    case "ws.message": {
+      const who = str(p.username) || `user ${num(p.user_id)}`
+      return `${who} sent to #${num(p.channel_id)} via ${str(p.replica) || "?"}`
+    }
+    case "ws.connect": {
+      const who = str(p.username) || `user ${num(p.user_id)}`
+      return `${who} connected to ${str(p.replica) || "?"}`
+    }
+    case "ws.disconnect": {
+      const who = str(p.username) || `user ${num(p.user_id)}`
+      return `${who} disconnected`
     }
     case "presence.online":
       return `user ${num(p.user_id)} online`
