@@ -172,7 +172,9 @@ Five producers tap signals that already exist — Docker events and stats (throu
 
 The dashboard lives at `http://localhost:3000/observability`. Its **START SIMULATION** button swaps the live observer socket for a deterministic 60-second scripted feed — same frame protocol, same envelope shapes, including a scripted `chorus-chat-2` death and recovery. Useful for working on the UI without Docker running, and for rehearsing the failure demo. While it runs, every number on screen comes from the recording and a SIMULATION pill says so. `?mock=1` still works as the initial state for tests and bookmarks.
 
-Edges only animate where the event stream can genuinely attribute the traffic. The `*→postgres` wires stay quiet on purpose: the gateway's access log stops at its own hop and the `chan:*` tap cannot say which replica performed an `INSERT`, so there is no honest per-request signal for them. Quiet is the accurate rendering, not a missing feature.
+Motion on the topology is one comet per real event, not decoration on a timer: a blue comet is a request crossing the gateway to whichever service handled it, and three pink comets leaving Redis at once are a single `PUBLISH` reaching all three replicas. Above ~50 events/s the view drops to flow mode, since tracing individual events stops being readable.
+
+Nothing is drawn where the event stream cannot genuinely attribute the traffic. The `*→postgres` wires stay quiet on purpose: the gateway's access log stops at its own hop and the `chan:*` tap cannot say which replica performed an `INSERT`. For the same reason there is no comet travelling *into* Redis — a subscriber is never told which client published, and the message carries the sender's user id, not the replica that handled it. Quiet is the accurate rendering, not a missing feature.
 
 Full protocol, event envelope, security posture and operational traps: [`docs/observability/README.md`](./docs/observability/README.md).
 
