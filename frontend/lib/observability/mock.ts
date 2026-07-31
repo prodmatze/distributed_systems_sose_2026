@@ -58,15 +58,21 @@ const UPSTREAMS_BY_SERVICE: Record<string, string[]> = {
   chat: ["172.19.0.21", "172.19.0.22", "172.19.0.23"],
 }
 
-const HTTP_ROUTES: { method: string; uri: string; service: string }[] = [
+// Mirrors the real gateway's JSON access log. Verified against live output:
+// REST calls are what the chat app actually issues, and a WebSocket upgrade
+// logs as `GET /ws?...` with status 101 (not 200) because nginx records it when
+// the connection closes. `okStatus` keeps the upgrade honest — a replica's
+// drawer should not claim it served a stream of plain 200s.
+const HTTP_ROUTES: { method: string; uri: string; service: string; okStatus?: number }[] = [
   { method: "GET", uri: "/api/channels", service: "api" },
-  { method: "GET", uri: "/api/channels/1/messages", service: "api" },
-  { method: "GET", uri: "/api/channels/3/messages", service: "api" },
-  { method: "POST", uri: "/api/channels/2/messages", service: "api" },
+  { method: "GET", uri: "/api/channels/1/messages?limit=50", service: "api" },
+  { method: "GET", uri: "/api/channels/3/messages?limit=50", service: "api" },
+  { method: "POST", uri: "/api/channels/2/join", service: "api" },
   { method: "GET", uri: "/api/users/me", service: "api" },
+  { method: "OPTIONS", uri: "/api/channels", service: "api" },
   { method: "POST", uri: "/auth/login", service: "auth" },
-  { method: "POST", uri: "/auth/refresh", service: "auth" },
-  { method: "GET", uri: "/chat/ws", service: "chat" },
+  { method: "POST", uri: "/auth/register", service: "auth" },
+  { method: "GET", uri: "/ws?token=…&last_seen_id=0", service: "chat", okStatus: 101 },
 ]
 
 const USERNAMES = ["alice", "bob", "carol", "obs_bot_1"]
