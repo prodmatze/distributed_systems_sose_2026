@@ -75,11 +75,16 @@ export function NodeDrawer({ id, onClose }: { id: ObsNodeId; onClose: () => void
 
       <div className="obs-drawer-row">
         <ServiceBadge service={topo?.service ?? "?"} />
-        <span className="obs-chip" style={{ color: pillColor, borderColor: pillColor }}>
-          {state}
-          {health ? ` · ${health}` : ""}
-        </span>
-        {topo?.external && <span className="obs-chip">external</span>}
+        {/* External nodes have no container behind them, so a container-state
+            pill would always read "unknown" and mean nothing. */}
+        {topo?.external ? (
+          <span className="obs-chip">external — not a container</span>
+        ) : (
+          <span className="obs-chip" style={{ color: pillColor, borderColor: pillColor }}>
+            {state}
+            {health ? ` · ${health}` : ""}
+          </span>
+        )}
       </div>
 
       {!topo?.external && (
@@ -172,8 +177,10 @@ export function NodeDrawer({ id, onClose }: { id: ObsNodeId; onClose: () => void
         {activity.length === 0 ? (
           <span className="obs-drawer-empty">
             {id === "postgres" || id === "redis"
-              ? "no per-request instrumentation on this node — see stats above"
-              : "nothing yet — start the simulation or send a chat message"}
+              ? "No per-request data for this node. See the statistics above."
+              : id === "browser"
+                ? "No requests yet. Open the chat app, or press START SIMULATION."
+                : "Nothing yet. Send a chat message, or press START SIMULATION."}
           </span>
         ) : (
           <ul>

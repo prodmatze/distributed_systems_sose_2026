@@ -211,6 +211,11 @@ export function isNodeActivity(
   slotForUpstream: (ip: string) => number,
 ): boolean {
   if (POLL_TYPES.has(e.type)) return false
+  // routeForEvent starts an http.request chain at the gateway, because that is
+  // the first node that *handled* it. But every one of those requests was made
+  // by a client, which is exactly what the browser node stands for, so it needs
+  // its own rule or its drawer can never match anything.
+  if (id === "browser") return e.type === "http.request"
   return routeForEvent(e, slotForUpstream).nodes.includes(id)
 }
 
