@@ -170,7 +170,9 @@ make obs-down    # stop everything, observability services included
 
 Five producers tap signals that already exist — Docker events and stats (through a read-only socket proxy), `PSUBSCRIBE chan:*`, Redis keyspace notifications for presence, `pg_stat_*` pollers, and the gateway's JSON access log. Everything lands in the Redis stream `obs:events`, which doubles as bus, ring buffer and replay cursor, and the observer republishes it over one WebSocket. **No producer needs a line of code in `auth`, `api` or `chat`**, so the observability layer can never be the thing that breaks the app it is watching.
 
-The dashboard lives at `http://localhost:3000/observability`. Append `?mock=1` to drive it from a deterministic 60-second scripted feed instead of the live stack — same frame protocol, same envelope shapes, including a scripted `chorus-chat-2` death and recovery. Useful for working on the UI without Docker running, and for rehearsing the failure demo.
+The dashboard lives at `http://localhost:3000/observability`. Its **START SIMULATION** button swaps the live observer socket for a deterministic 60-second scripted feed — same frame protocol, same envelope shapes, including a scripted `chorus-chat-2` death and recovery. Useful for working on the UI without Docker running, and for rehearsing the failure demo. While it runs, every number on screen comes from the recording and a SIMULATION pill says so. `?mock=1` still works as the initial state for tests and bookmarks.
+
+Edges only animate where the event stream can genuinely attribute the traffic. The `*→postgres` wires stay quiet on purpose: the gateway's access log stops at its own hop and the `chan:*` tap cannot say which replica performed an `INSERT`, so there is no honest per-request signal for them. Quiet is the accurate rendering, not a missing feature.
 
 Full protocol, event envelope, security posture and operational traps: [`docs/observability/README.md`](./docs/observability/README.md).
 
