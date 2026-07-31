@@ -16,9 +16,20 @@ export function ConnectionPill() {
   const look = LOOK[conn]
   return (
     <span style={{ display: "inline-flex", gap: "var(--space-2)", alignItems: "center" }}>
+      {/* Loud on purpose. While the simulation runs, nothing on screen came
+          from the real stack, and that must never be mistakable for live. */}
       {mock && (
-        <span className="obs-chip" style={{ color: "var(--accent)", borderColor: "var(--accent-border)" }}>
-          MOCK FEED
+        <span
+          className="obs-chip"
+          title="Replaying a recorded event stream — the live stack is not being observed"
+          style={{
+            color: "var(--status-warn)",
+            borderColor: "var(--status-warn)",
+            background: "var(--status-warn-dim)",
+            fontWeight: 600,
+          }}
+        >
+          ▶ SIMULATION
         </span>
       )}
       {resumedFrom && (

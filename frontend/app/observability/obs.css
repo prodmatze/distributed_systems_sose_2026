@@ -268,6 +268,9 @@
 
 /* Edge classes — out-specify xyflow's own .react-flow__edge-path rule. */
 .obs .react-flow__edge-path.obs-edge { stroke: var(--border-2); stroke-width: 1; }
+/* A wire with measured traffic brightens; an idle one stays a dim hairline, so
+   the difference between "carrying" and "quiet" reads without counting dots. */
+.obs .react-flow__edge-path.obs-edge-live { stroke: var(--accent-border); stroke-width: 1.25; }
 .obs .react-flow__edge-path.obs-edge-flow {
   stroke: var(--accent);
   stroke-width: 1.5;
@@ -479,9 +482,166 @@
   justify-content: space-between;
   font-size: var(--text-xs);
 }
-.obs-drawer-action { color: var(--text-1); }
-.obs-drawer-ts { color: var(--text-3); }
-.obs-drawer-empty { font-size: var(--text-xs); color: var(--text-3); }
+.obs-drawer-action { color: var(--text-1); overflow-wrap: anywhere; }
+.obs-drawer-ts { color: var(--text-3); flex-shrink: 0; padding-left: var(--space-2); }
+.obs-drawer-empty { font-size: var(--text-xs); color: var(--text-3); line-height: 1.5; }
+
+/* SQL rows: the query is the interesting part, so let it wrap to two lines and
+   ellipsize beyond that rather than shove the rate column off the panel. */
+.obs-drawer-query { align-items: flex-start; gap: var(--space-2); }
+.obs-drawer-sql {
+  color: var(--evt-sql);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Dots are never unmounted, only faded, so a wire going quiet does not delete a
+   dot mid-path. The transition is what turns that on and off smoothly. */
+.obs .obs-edge-dot { transition: opacity 600ms ease, r 300ms ease; }
+
+/* Event feed. The wrapper must be the flex child that takes the leftover
+   height (flex:1 + min-height:0) and establish the positioning context for the
+   jump button; Virtuoso then fills it at height:100%. Without min-height:0 a
+   flex child refuses to shrink below its content and the list collapses. */
+.obs-feed-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.obs-feed-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-6);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-3);
+  line-height: 1.6;
+}
+.obs-feed-empty strong { color: var(--text-2); font-size: var(--text-sm); }
+.obs-feed-empty code {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  background: var(--bg-0);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-xs);
+  padding: 0 var(--space-1);
+}
+.obs-feed-jump {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-full);
+  background: var(--bg-2);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+}
+.obs-feed-jump:hover { background: var(--bg-3); }
+.obs-feed-jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Header buttons — chips that are actually clickable. */
+.obs-sim-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-2);
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.obs-sim-btn:hover { color: var(--text-1); border-color: var(--border-2); background: var(--bg-3); }
+.obs-sim-btn[data-running] {
+  color: var(--status-warn);
+  border-color: var(--status-warn);
+  background: var(--status-warn-dim);
+}
+.obs-sim-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* About overlay */
+.obs-about-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.obs-about {
+  width: min(760px, 100%);
+  max-height: min(86dvh, 900px);
+  overflow-y: auto;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.obs-about-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: calc(var(--space-5) * -1);
+  margin: calc(var(--space-5) * -1) calc(var(--space-5) * -1) 0;
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border-1);
+}
+.obs-about-title {
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-display);
+  color: var(--text-1);
+}
+.obs-about h3 { margin: 0 0 var(--space-2); color: var(--accent); }
+.obs-about p { margin: 0 0 var(--space-2); }
+.obs-about strong { color: var(--text-1); }
+.obs-about section { display: flex; flex-direction: column; }
+.obs-about-diagram {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-0);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-2);
+  overflow-x: auto;
+  line-height: 1.45;
+}
+.obs-about-list { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: var(--space-2); }
+.obs-about-legend { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+.obs-about-legend li { display: grid; grid-template-columns: 10px 130px 1fr; gap: var(--space-3); align-items: baseline; }
+.obs-about-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; transform: translateY(1px); }
+.obs-about-evt { color: var(--text-1); font-size: var(--text-xs); }
+
+@media (max-width: 640px) {
+  .obs-about-legend li { grid-template-columns: 10px 1fr; }
+  .obs-about-legend li > :last-child { grid-column: 2; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .obs .obs-pulse,
