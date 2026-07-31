@@ -132,9 +132,9 @@ Protocol, event envelope, security posture and operational traps: [`docs/observa
 
 ## The app
 
-![Chat](./screenshots/chat.png)
+![Chat](./screenshots/register.png)
 
-![Channels](./screenshots/channels.png)
+![Channels](./screenshots/chat.png)
 
 ## Layout
 
