@@ -6,20 +6,17 @@
 // (topology-node.tsx) carries the "busy" signal once the per-node rate cap
 // kicks in; pulses stay a discrete "something happened" flourish.
 import { useObsStore } from "@/lib/observability/store"
-import { makeSlotAllocator, routeForEvent } from "@/lib/observability/topology-model"
+import { routeForEvent, slotForUpstream } from "@/lib/observability/topology-model"
 
 const PULSE_CAP_PER_S = 8
 
 const nodeEls = new Map<string, HTMLElement>()
 const tokenSecond = new Map<string, number>()
 const tokenCount = new Map<string, number>()
-// Module scope so ip→slot mappings survive topology remounts — same ip, same
-// slot, forever (the allocator contract in topology-model.ts). Exported so
-// comet-canvas.tsx shares this exact instance: the pulse and the comet must
-// pick the same chat replica for the same request, or the hero "follow a
-// request through the system" moment shows two different chat nodes lighting
-// up for one upstream ip.
-export const slotForUpstream = makeSlotAllocator()
+// Re-exported from lib so existing imports keep working. The instance itself
+// now lives in topology-model.ts, because the event feed needs it too and lib
+// must not import from components.
+export { slotForUpstream }
 
 export function registerNodeEl(id: string, el: HTMLElement | null): void {
   if (el) nodeEls.set(id, el)

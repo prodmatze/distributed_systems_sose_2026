@@ -3,6 +3,7 @@
 // (Record<string, unknown>) so every field read here is defensive — a
 // malformed or forward-incompatible payload degrades to a placeholder
 // instead of throwing.
+import { replicaLabel } from "./topology-model"
 import type { Envelope } from "./types"
 
 export type EvtKind = "http" | "chat" | "docker" | "presence" | "stats" | "other"
@@ -90,11 +91,11 @@ export function summarizeEvent(e: Envelope): string {
     }
     case "ws.message": {
       const who = str(p.username) || `user ${num(p.user_id)}`
-      return `${who} sent to #${num(p.channel_id)} via ${str(p.replica) || "?"}`
+      return `${who} sent to #${num(p.channel_id)} via ${replicaLabel(p.replica)}`
     }
     case "ws.connect": {
       const who = str(p.username) || `user ${num(p.user_id)}`
-      return `${who} connected to ${str(p.replica) || "?"}`
+      return `${who} connected to ${replicaLabel(p.replica)}`
     }
     case "ws.disconnect": {
       const who = str(p.username) || `user ${num(p.user_id)}`

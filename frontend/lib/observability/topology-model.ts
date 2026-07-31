@@ -135,6 +135,20 @@ export function makeSlotAllocator(): (ip: string) => number {
   }
 }
 
+// The one shared instance. It lives here, in lib, rather than beside the
+// components that first needed it, because the pulses, the comets, the edges,
+// the drawer AND the event feed all have to agree on which visual replica an
+// address maps to. Two allocators would silently disagree.
+export const slotForUpstream = makeSlotAllocator()
+
+// "172.18.0.9:8000" or "172.18.0.9" → "chat-2". Ports are stripped so an
+// address reported by nginx and the same address reported by the replica itself
+// resolve identically.
+export function replicaLabel(addr: unknown): string {
+  if (typeof addr !== "string" || addr === "") return "?"
+  return `chat-${slotForUpstream(addr.split(":")[0])}`
+}
+
 const EXITED_ACTIONS = new Set(["die", "stop", "kill", "oom"])
 
 export type EventRoute = { nodes: ObsNodeId[]; color: string }
