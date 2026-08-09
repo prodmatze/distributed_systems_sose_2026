@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # keep in sync with the python:3.12-slim base image in backend/*/Dockerfile
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/*/pyproject.toml
+      - name: Install backend packages
+        run: |
+          python -m pip install -e backend/shared -e backend/api -e backend/auth -e backend/chat
+          python -m pip install pytest pytest-asyncio
+      - name: Test shared
+        run: pytest backend/shared/tests
+      - name: Test chat
+        run: pytest backend/chat/tests
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          # the pnpm version comes from "packageManager", which lives in
+          # frontend/package.json, not the repo root
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          # Turbopack panics under Node 26 — keep in sync with the local Node 24 LTS pin
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # no lint step yet: `pnpm lint` currently fails on 4 pre-existing
+      # react-hooks errors — enable once those are fixed
+      - name: Build
+        run: pnpm build
